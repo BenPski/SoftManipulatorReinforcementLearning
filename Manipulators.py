@@ -60,7 +60,7 @@ class Manipulator(object, metaclass=ABCMeta):
     also, since the current implementations require a matlab connection, that needs to be established first
     """
 
-    def __init__(self,n,dt,max_q)
+    def __init__(self,n,dt,max_q):
         self.n = n
         self.dt = dt
         self.max_q = max_q
