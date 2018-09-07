@@ -55,17 +55,17 @@ will go like this
 
 
 """
-
+#for some reason have to import performance first, or else there is an error with loading tensorflow
+import Performance as P #performance measures
 import Manipulators as M #contains the manipulator dynamics definitions
 import Workspace as W #the workspace
 import EnvironmentWrappers as EW #the wrappers to take manipulators to environments
-import Performance as P #performance measures
 import numpy as np
 import pickle
 import os.path
 
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Flatten, Input, merge
+from keras.layers import Dense, Activation, Flatten, Input, Concatenate
 from keras.optimizers import Adam
 
 from rl.agents import DDPGAgent
@@ -163,7 +163,7 @@ def runDynamicReaching(samples, steps, manip, target, tip, weights_file, perf_fi
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
     flattened_observation = Flatten()(observation_input)
-    x = merge([action_input, flattened_observation], mode='concat')
+    x = Concatenate(axis=-1)([action_input, flattened_observation])
     x = Dense(32)(x)
     x = Activation('tanh')(x)
     x = Dense(32)(x)
@@ -209,7 +209,7 @@ def runVariableTarget(samples, steps, manip, workspace, tip, weights_file, perf_
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
     flattened_observation = Flatten()(observation_input)
-    x = merge([action_input, flattened_observation], mode='concat')
+    x = Concatenate(axis=-1)([action_input, flattened_observation])
     x = Dense(32)(x)
     x = Activation('tanh')(x)
     x = Dense(32)(x)
@@ -253,7 +253,7 @@ def runVariableTrajectory(samples, steps, manip, workspace, tip, z, r, steps_per
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
     flattened_observation = Flatten()(observation_input)
-    x = merge([action_input, flattened_observation], mode='concat')
+    x = Concatenate(axis=-1)([action_input, flattened_observation])
     x = Dense(32)(x)
     x = Activation('tanh')(x)
     x = Dense(32)(x)
