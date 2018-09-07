@@ -37,5 +37,5 @@ Now, if you don't have root/admin access specifying a build-dir is likely necess
 The api should be installed to test that is worked try to open python and import matlab.engine, if there is no error then it should work.
 
 # Getting the Manipulators Interfaced to the Libraries
-To get the code in Manipulators.py properly working the location of the SoftManipulatorDynamics need to be known, this can be specified when contructing the Manipulators object or it can be hardcoded elsewhere.
+To get the code in Manipulators.py properly working the location of the SoftManipulatorDynamics needs to be known, currently the default configuration will look in the current directory. You can edit the manip_config.ini to set the location of the manipulators directory, also the program will simply fail when creating a manipulator object until the configuration is properly specified.
 
