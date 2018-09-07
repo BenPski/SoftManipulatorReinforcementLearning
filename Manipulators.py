@@ -11,6 +11,44 @@ import numpy as np
 
 from matlab_utils import mat2np, np2mat
 
+import configparser
+import os
+import sys
+
+def readConfig():
+    """
+    read the configuration file
+    """
+
+    #trying to load the configuration
+    config = configparser.ConfigParser()
+    if os.path.exists('manip_config.ini'):
+        config.read('manip_config.ini')
+    else:
+        config['Manipulators'] = {'manip_location': "."}
+        with open('manip_config.ini','w') as f:
+            config.write(f)
+        sys.exit("In order to connect to Matlab, need to know where the directory is where the matlab code exists forthe soft manipulators. A basic one has been created and it likely needs to be edited as it will only search the current directory.")
+
+    #pull out the location
+    try:
+        location = config['Manipulators']['manip_location']
+    except:
+        sys.exit("The config file appears to be formatted incorrectly")
+
+    #check if the directory exists and if the right files are found
+
+    if os.path.isdir(location):
+        #check for the files
+        if os.path.exists(os.path.join(location,"initialDynamics.m")) and os.path.exists(os.path.join(location,"fastDynamicsStable.m")) and os.path.exists(os.path.join(location,"initTCADynamics.m")) and os.path.exists(os.path.join(location,"fullTCADynamics.m")):
+            return location
+        else:
+            sys.exit("One of the required manipulator files was not found in the directory given.")
+    else:
+        sys.exit("The directory specified either does not exist or it is not a directory.")
+
+
+
 
 class Manipulator(object, metaclass=ABCMeta):
     """
@@ -22,11 +60,12 @@ class Manipulator(object, metaclass=ABCMeta):
     also, since the current implementations require a matlab connection, that needs to be established first
     """
 
-    def __init__(self,n,dt,max_q,base_location="/home/ben/School/research/muscle/"):
+    def __init__(self,n,dt,max_q)
         self.n = n
         self.dt = dt
         self.max_q = max_q
-        self.base_location = base_location # base location for the matlab connection
+        #self.base_location = base_location # base location for the matlab connection
+        self.base_location = readConfig()
         self.eng = self.connectMatlab()
 
         self.state = {} #store states as a dictionary
