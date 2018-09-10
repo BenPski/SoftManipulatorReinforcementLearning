@@ -118,6 +118,19 @@ class Manipulator(object, metaclass=ABCMeta):
         self.eng.plot3(np2mat(g[:,9]),np2mat(g[:,10]),np2mat(g[:,11]))
         self.eng.daspect(np2mat([1,1,1]),nargout=0)
 
+    def __getstate__(self):
+        #can't pickle the matlab engine, so need to avoid it
+        d = {}
+        for key, item in self.__dict__.items():
+            if key != 'eng': #remove engine
+                d[key] = item
+        return d
+
+    def __setstate__(self,s):
+        self.__dict__.update(s)
+        #have to restart the connection
+        self.eng = self.connectMatlab()
+
 
 
 class CableManipulator(Manipulator):
@@ -154,6 +167,7 @@ class CableManipulator(Manipulator):
         self.state = state
 
         return (state, a)
+
 
 class TCAManipulator(Manipulator):
     """

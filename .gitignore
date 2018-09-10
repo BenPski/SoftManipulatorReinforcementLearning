@@ -1,4 +1,5 @@
 *.pkl
+*.ini
 tests/*
 weights/*
 perfs/*

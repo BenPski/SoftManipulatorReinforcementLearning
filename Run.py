@@ -55,15 +55,7 @@ will go like this
 
 
 """
-
-import Manipulators as M #contains the manipulator dynamics definitions
-import Workspace as W #the workspace
-import EnvironmentWrappers as EW #the wrappers to take manipulators to environments
-import Performance as P #performance measures
-import numpy as np
-import pickle
-import os.path
-
+#for some reason this avoids crashes on Windows
 from keras.models import Sequential, Model
 from keras.layers import Dense, Activation, Flatten, Input, Concatenate
 from keras.optimizers import Adam
@@ -71,6 +63,16 @@ from keras.optimizers import Adam
 from rl.agents import DDPGAgent
 from rl.memory import SequentialMemory
 import rl.random
+
+#import Manipulators as M #contains the manipulator dynamics definitions
+#import Workspace as W #the workspace
+import EnvironmentWrappers as EW #the wrappers to take manipulators to environments
+#import Performance as P #performance measures
+import numpy as np
+import pickle
+import os.path
+
+
 
 from manipAndWorkspace import manips, workspaces
 from network_utils import generateAgent
@@ -103,10 +105,10 @@ class Runner(object):
             self.target = getTargets(self.static_workspace, self.dynamic_workspace,1)[0]
             self.env = EW.DynamicReaching(self.manip, self.target, tipOnly = self.tip)
         elif task=='varTarg':
-            self.env = EW.VariableTarget(self.manip, self.dynamic_workspace, tipOnly = tip)
+            self.env = EW.VariableTarget(self.manip, self.dynamic_workspace, tipOnly = self.tip)
         elif task=='varTraj':
             self.tau = steps*self.manip.dt
-            self.env = EW.VariableTrajectory(self.manip, self.static_workspace, self.tau, tipOnly = tip)
+            self.env = EW.VariableTrajectory(self.manip, self.static_workspace, self.tau, tipOnly = self.tip)
 
         #setup the ddpg agent and networks
         self.samples = samples
@@ -141,6 +143,8 @@ class Runner(object):
 
         #then save the results
         self.save()
+
+        #return self #?
 
 
     def save(self):
