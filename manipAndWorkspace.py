@@ -12,7 +12,7 @@ manipCable = M.CableManipulator(10,0.01,0.1)
 
 manipTCA = M.TCAManipulator(5,0.1,3)
 
-manips = {'cable':manipCable, 'tca':manipTCA}
+
 
 #the workspace file locations
 def getStaticWorkspace(manip,filename, **kwargs):
@@ -36,11 +36,11 @@ def getDynamicWorkspace(manip, staticWorkspace, filename, **kwargs):
             pickle.dump(workspace, f)
         return workspace
 
-cable_static_workspace = "cable_static_workspace.pkl"
-tca_static_workspace = "tca_static_workspace.pkl"
+cable_static_workspace = "workspaces/cable_static_workspace.pkl"
+tca_static_workspace = "workspaces/tca_static_workspace.pkl"
 
-cable_dynamic_workspace = "cable_dynamic_workspace.pkl"
-tca_dynamic_workspace = "tca_dynamic_workspace.pkl"
+cable_dynamic_workspace = "workspaces/cable_dynamic_workspace.pkl"
+tca_dynamic_workspace = "workspaces/tca_dynamic_workspace.pkl"
 
 #only need to use the tip state
 staticWorkspaceCable = getStaticWorkspace(manipCable,cable_static_workspace)
@@ -48,7 +48,12 @@ staticWorkspaceTCA = getStaticWorkspace(manipTCA,tca_static_workspace, STEPS = 2
 dynamicWorkspaceCable = getDynamicWorkspace(manipCable,staticWorkspaceCable,cable_dynamic_workspace)
 dynamicWorkspaceTCA = getDynamicWorkspace(manipTCA,staticWorkspaceTCA,tca_dynamic_workspace, SAMPLES = 50, STEPS = 100)
 
+
+
+#the more convenient things to be exporting and using
 workspaces = {'cable_static':staticWorkspaceCable,
               'cable_dynamic':dynamicWorkspaceCable,
               'tca_static':staticWorkspaceTCA,
               'tca_dynamic':dynamicWorkspaceTCA}
+
+manips = {'cable':manipCable, 'tca':manipTCA}

@@ -2,3 +2,5 @@
 tests/*
 weights/*
 perfs/*
+workspaces/*
+__pycache__/*
