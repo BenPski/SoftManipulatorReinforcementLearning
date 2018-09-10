@@ -55,11 +55,11 @@ will go like this
 
 
 """
-#for some reason have to import performance first, or else there is an error with loading tensorflow
-import Performance as P #performance measures
+
 import Manipulators as M #contains the manipulator dynamics definitions
 import Workspace as W #the workspace
 import EnvironmentWrappers as EW #the wrappers to take manipulators to environments
+import Performance as P #performance measures
 import numpy as np
 import pickle
 import os.path
@@ -72,50 +72,104 @@ from rl.agents import DDPGAgent
 from rl.memory import SequentialMemory
 import rl.random
 
-manipCable = M.CableManipulator(10,0.01,0.1)
+from manipAndWorkspace import manips, workspaces
+from network_utils import generateAgent
 
-manipTCA = M.TCAManipulator(5,0.1,3)
+import argparse
+import configparser
+import uuid
+import datetime
 
-#the workspace file locations
-def getStaticWorkspace(manip,filename, **kwargs):
-    if os.path.isfile(filename):
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
-    else:
-        workspace = W.makeStaticManipulatorWorkspace(manip, **kwargs)
-        with open(filename, 'wb') as f:
-            pickle.dump(workspace, f)
-        return workspace
+class Runner(object):
+    """
+    runs a test and saves configs
+    """
 
-def getDynamicWorkspace(manip, staticWorkspace, filename, **kwargs):
-    if os.path.isfile(filename):
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
-    else:
-        #workspace = W.makeDynamicManipulatorWorkspace(manip, **kwargs)
-        workspace = W.dynamicWorkspace(manip, staticWorkspace, **kwargs)
-        with open(filename, 'wb') as f:
-            pickle.dump(workspace, f)
-        return workspace
+    def __init__(self,manip,state,task,samples,steps=100,actor_hidden=[100,100],actor_act='relu',critic_hidden=[100,100],critic_act='relu'):
 
-cable_static_workspace = "cable_static_workspace.pkl"
-tca_static_workspace = "tca_static_workspace.pkl"
+        #get things associated properly with the manipulator
+        self.manip_name = manip
+        self.manip = manips[manip]
+        self.static_workspace = workspaces[manip+'_static']
+        self.dynamic_workspace = workspaces[manip+'_dynamic']
 
-cable_dynamic_workspace = "cable_dynamic_workspace.pkl"
-tca_dynamic_workspace = "tca_dynamic_workspace.pkl"
+        #the state to be measured
+        self.state = state
+        self.tip = state == 'tip'
 
-#only need to use the tip state
-print("loading workspaces")
-staticWorkspaceCable = getStaticWorkspace(manipCable,cable_static_workspace)
-print("got static cable")
-staticWorkspaceTCA = getStaticWorkspace(manipTCA,tca_static_workspace, STEPS = 200)
-print("got static tca")
-dynamicWorkspaceCable = getDynamicWorkspace(manipCable,staticWorkspaceCable,cable_dynamic_workspace)
-print("got dynamic cable")
-dynamicWorkspaceTCA = getDynamicWorkspace(manipTCA,staticWorkspaceTCA,tca_dynamic_workspace, SAMPLES = 50, STEPS = 100)
-print("got dynamic tca")
+        #setup environment
+        self.task = task
+        if task=='dynReach':
+            self.target = getTargets(self.static_workspace, self.dynamic_workspace,1)[0]
+            self.env = EW.DynamicReaching(self.manip, self.target, tipOnly = self.tip)
+        elif task=='varTarg':
+            self.env = EW.VariableTarget(self.manip, self.dynamic_workspace, tipOnly = tip)
+        elif task=='varTraj':
+            self.tau = steps*self.manip.dt
+            self.env = EW.VariableTrajectory(self.manip, self.static_workspace, self.tau, tipOnly = tip)
 
-#dynamicWorkspaceTCA.plot(), # I still don't like the workspace, but it is getting annoying at this point
+        #setup the ddpg agent and networks
+        self.samples = samples
+        self.steps = steps
+        self.actor_hidden = actor_hidden
+        self.actor_act = actor_act
+        self.critic_hidden = critic_hidden
+        self.critic_act = critic_act
+
+        self.agent = generateAgent(self.env,self.actor_hidden,self.actor_act,self.critic_hidden,self.critic_act)
+
+        #setup config
+        #for the config need to know manipulator information
+        self.config = configparser.ConfigParser()
+        self.config['Manipulator'] = {'manip':self.manip_name}
+        self.config['State'] = {'state': self.state}
+        if self.task == 'dynReach':
+            self.config['Task'] = {'task':self.task, 'target': self.target}
+        elif self.task == 'varTarg':
+            self.config['Task'] = {'task':self.task}
+        elif self.task == 'varTraj':
+            self.config['Task'] = {'task':self.task, 'tau':self.tau}
+
+        self.config['Test'] = {'perf_location': ""} #no performance file exists yet
+
+        self.config_base_location = "./tests/"+self.manip_name+'_'+self.state+'_'+self.task
+        self.weights_base_location = "./weights/"+self.manip_name+'_'+self.state+'_'+self.task
+
+    def run(self):
+        #simply run the fitting process
+        self.agent.fit(self.env, nb_steps=self.samples, visualize=False, verbose=2, nb_max_episode_steps=self.steps)
+
+        #then save the results
+        self.save()
+
+
+    def save(self):
+        #want to save the config and have it point to the relevant weights location
+        #make sure the relevant directories exist
+        try:
+            os.makedirs('tests')
+        except:
+            pass #likely already exists, so no need to worry
+        try:
+            os.makedirs('weights')
+        except:
+            pass
+
+        weights_name = self.weights_base_location + '_' + str(uuid.uuid4()) + '.h5f' #append a rnadom uuid to the end of the name so that it is unique
+        self.agent.save_weights(weights_name,overwrite=False) #should never need to overwrite
+        #now that the weights are saved write down the file location
+        self.config['Networks'] = {'weights_location':weights_name, 'actor_hidden':self.actor_hidden, 'actor_act':self.actor_act, 'critic_hidden':self.critic_hidden, 'critic_act': self.critic_act}
+        #for saving the config we want a name that makes some sense so that it is simple to keep track of
+        #append the timestamp to the name
+        config_name = self.config_base_location + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.ini'
+        with open(config_name,'w') as f:
+            self.config.write(f)
+        print("Config saved to: ", config_name)
+
+
+
+
+
 
 
 def run(agent, samples, steps, env, performance, weights_file, perf_file):
@@ -126,7 +180,7 @@ def run(agent, samples, steps, env, performance, weights_file, perf_file):
     try: #don't repeat a test
         agent.load_weights(weights_file)
     except:
-        agent.fit(env, nb_steps=samples, visualize=False, verbose=2, nb_max_episode_steps=steps, callbacks = [performance])
+        agent.fit(env, nb_steps=samples, visualize=False, verbose=2, nb_max_episode_steps=steps)#, callbacks = [performance]), don't feel like having performance
 
         agent.save_weights(weights_file, overwrite=True)
 
@@ -139,12 +193,12 @@ def run(agent, samples, steps, env, performance, weights_file, perf_file):
 
     return (agent, performance.perfs)
 
-def runDynamicReaching(samples, steps, manip, target, tip, weights_file, perf_file):
+def runDynamicReaching(samples, steps, manip, target, tip, weights_file, perf_file, bound):
     """
     run the dynamic reaching
     """
 
-    env = EW.DynamicReaching(manip, target, tipOnly = tip)
+    env = EW.DynamicReaching(manip, target, tipOnly = tip, bound=bound)
     perf = P.PolicyEval(lambda actor: P.performanceDynamicReaching(env,actor))
 
     nb_actions = env.action_space.shape[0]
@@ -163,7 +217,7 @@ def runDynamicReaching(samples, steps, manip, target, tip, weights_file, perf_fi
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
     flattened_observation = Flatten()(observation_input)
-    x = Concatenate(axis=-1)([action_input, flattened_observation])
+    x = merge([action_input, flattened_observation], mode='concat')
     x = Dense(32)(x)
     x = Activation('tanh')(x)
     x = Dense(32)(x)
@@ -209,7 +263,7 @@ def runVariableTarget(samples, steps, manip, workspace, tip, weights_file, perf_
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
     flattened_observation = Flatten()(observation_input)
-    x = Concatenate(axis=-1)([action_input, flattened_observation])
+    x = merge([action_input, flattened_observation], mode='concat')
     x = Dense(32)(x)
     x = Activation('tanh')(x)
     x = Dense(32)(x)
@@ -253,7 +307,7 @@ def runVariableTrajectory(samples, steps, manip, workspace, tip, z, r, steps_per
     action_input = Input(shape=(nb_actions,), name='action_input')
     observation_input = Input(shape=(1,) + env.observation_space.shape, name='observation_input')
     flattened_observation = Flatten()(observation_input)
-    x = Concatenate(axis=-1)([action_input, flattened_observation])
+    x = merge([action_input, flattened_observation], mode='concat')
     x = Dense(32)(x)
     x = Activation('tanh')(x)
     x = Dense(32)(x)
@@ -279,42 +333,56 @@ def DynamicReaching():
     the dynamic reaching routine
     """
 
-    samples = 10000
+    samples = 20000
     steps = 100
 
     #first do the cables
-    targets = getTargets(staticWorkspaceCable, 3)
-    with open('cable_targets.pkl','wb') as f:
-        pickle.dump(targets, f)
+    if os.path.exists('cable_targets.pkl'): #already generated targets
+        with open('cable_targets.pkl','rb') as f:
+            targets = pickle.load(f)
+    else:
+        targets = getTargets(staticWorkspaceCable, dynamicWorkspaceCable, 3)
+        with open('cable_targets.pkl','wb') as f:
+            pickle.dump(targets, f)
+
+    bound = staticWorkspaceCable.max_r
+    print(bound)
 
     print("\tStarting Cable")
     print("\t targets: ", targets)
     #tip
     for (i,target) in enumerate(targets):
         print("\t\tTip iteration: ", i)
-        runDynamicReaching(samples, steps, manipCable, target, True, "cable_DynReach_tip_weights_" + str(i) + ".h5f", "cable_DynReach_tip_perf_" + str(i) + ".pkl")
+        runDynamicReaching(samples, steps, manipCable, target, True, "cable_DynReach_tip_weights_" + str(i) + ".h5f", "cable_DynReach_tip_perf_" + str(i) + ".pkl",bound)
 
     #now do with both the states
     for (i,target) in enumerate(targets):
         print("\t\tBoth iteration: ", i)
-        runDynamicReaching(samples, steps, manipCable, target, False, "cable_DynReach_both_weights_" + str(i) + ".h5f", "cable_DynReach_both_perf_" + str(i) + ".pkl")
+        runDynamicReaching(samples, steps, manipCable, target, False, "cable_DynReach_both_weights_" + str(i) + ".h5f", "cable_DynReach_both_perf_" + str(i) + ".pkl",bound)
 
     #do the tca
-    targets = getTargets(staticWorkspaceTCA, 3)
-    with open('tca_targets.pkl','wb') as f:
-        pickle.dump(targets,f)
+    if os.path.exists('tca_targets.pkl'): #already generated targets
+        with open('tca_targets.pkl','rb') as f:
+            targets = pickle.load(f)
+    else:
+        targets = getTargets(staticWorkspaceTCA, dynamicWorkspaceTCA, 3)
+        with open('tca_targets.pkl','wb') as f:
+            pickle.dump(targets, f)
+
+    bound = staticWorkspaceTCA.max_r
+    print(bound)
 
     print("\tStarting TCA")
     print("\t targets: ", targets)
     #tip
     for (i,target) in enumerate(targets):
         print("\t\tTip iteration: ", i)
-        runDynamicReaching(samples, steps, manipTCA, target, True, "tca_DynReach_tip_weights_" + str(i) + ".h5f", "tca_DynReach_tip_perf_" + str(i) + ".pkl")
+        runDynamicReaching(samples, steps, manipTCA, target, True, "tca_DynReach_tip_weights_" + str(i) + ".h5f", "tca_DynReach_tip_perf_" + str(i) + ".pkl",bound)
 
     #now do with both the states
     for (i,target) in enumerate(targets):
         print("\t\tBoth iteration: ", i)
-        runDynamicReaching(samples, steps, manipTCA, target, False, "tca_DynReach_both_weights_" + str(i) + ".h5f", "tca_DynReach_both_perf_" + str(i) + ".pkl")
+        runDynamicReaching(samples, steps, manipTCA, target, False, "tca_DynReach_both_weights_" + str(i) + ".h5f", "tca_DynReach_both_perf_" + str(i) + ".pkl",bound)
 
 def VariableTarget():
     """
@@ -361,9 +429,13 @@ def VariableTrajectory():
     REPLICATES = 3
 
     #do the cable first
-    z,r = getCircleTrajectory(staticWorkspaceCable)
-    with open('cable_trajectory_params.pkl','wb') as f:
-        pickle.dump((z,r), f)
+    if os.path.exists('cable_trajectory_params.pkl'): #already generated
+        with open('cable_trajectory_params.pkl','rb') as f:
+            z,r = pickle.dump(f)
+    else:
+        z,r = getCircleTrajectory(staticWorkspaceCable)
+        with open('cable_trajectory_params.pkl','wb') as f:
+            pickle.dump((z,r), f)
 
     print("\tStarting Cable")
     print("\tValues: (z,r) ", z, r)
@@ -379,12 +451,16 @@ def VariableTrajectory():
         runVariableTrajectory(samples, steps, manipCable, staticWorkspaceCable, False, z, r, steps, "cable_VarTraj_both_weights_" + str(i) + ".h5f", "cable_VarTraj_both_perf_" + str(i) + ".pkl")
 
     #now tcas
-    z,r = getCircleTrajectory(staticWorkspaceCable)
+    if os.path.exists('tca_trajectory_params.pkl'): #already generated
+        with open('tca_trajectory_params.pkl','rb') as f:
+            z,r = pickle.dump(f)
+    else:
+        z,r = getCircleTrajectory(staticWorkspaceTCA)
+        with open('tca_trajectory_params.pkl','wb') as f:
+            pickle.dump((z,r), f)
+
     print("\tStarting TCA")
     print("\tValues: (z,r) ", z, r)
-
-    with open('cable_trajectory_params.pkl','wb') as f:
-        pickle.dump((z,r), f)
     #tip
     for i in range(REPLICATES):
         print("\t\tTip replicate: ", i)
@@ -396,7 +472,7 @@ def VariableTrajectory():
         runVariableTrajectory(samples, steps, manipTCA, staticWorkspaceTCA, False, z, r, steps, "tca_VarTraj_both_weights_" + str(i) + ".h5f", "tca_VarTraj_both_perf_" + str(i) + ".pkl")
 
 
-def getTargets(staticWorkspace, n, perturb=1e-3):
+def getTargets(staticWorkspace, dynamicWorkspace, n, perturb=1e-3):
     """
     need to get the dynamic reaching targets from the static Workspace
 
@@ -413,7 +489,7 @@ def getTargets(staticWorkspace, n, perturb=1e-3):
 
         point = vert + np.random.uniform(-1*np.array(3*[perturb]), np.array(3*[perturb]))
 
-        if staticWorkspace.inside(point):
+        if (not staticWorkspace.inside(point)) and dynamicWorkspace.inside(point):
             targets.append(point)
 
     return targets
@@ -459,5 +535,24 @@ def runAll():
     print("Running Variable Trajectory")
     VariableTrajectory()
 
+
 if __name__ == "__main__":
-    runAll()
+    #runAll()
+    parser = argparse.ArgumentParser(description="Running a learning routine")
+    parser.add_argument('manipulator', choices = ['cable','tca'], metavar='manip', type=str, help='The type of manipulator')
+    parser.add_argument('state', choices=['tip','both'], metavar='state', type=str, help='The measured state')
+    parser.add_argument('task', choices=['dynReach', 'varTarg', 'varTraj'], metavar='task', type=str, help='The task to be trained on')
+    parser.add_argument('samples', metavar='samples', type=int, help='The number of samples to train on')
+
+    parser.add_argument('--actor_hidden', metavar='N', type=int, nargs='+', default=[100,100], help='The hidden network structure for the actor')
+    parser.add_argument('--actor_activation', metavar='act', type=str, choices=['relu','tanh'], default='relu', help='The activation function for the actor')
+    parser.add_argument('--critic_hidden', metavar='N', type=int, nargs='+', default=[100,100], help='The hidden network structure for the critic')
+    parser.add_argument('--critic_activation', metavar='act', type=str, choices=['relu','tanh'], default='relu', help='The activation function for the critic')
+
+    args = parser.parse_args()
+    #print(args)
+
+    #run the training given the arguments
+
+    test = Runner(args.manipulator,args.state,args.task,args.samples,actor_hidden=args.actor_hidden,actor_act=args.actor_activation,critic_hidden=args.critic_hidden,critic_act=args.critic_activation)
+    test.run()

@@ -1,0 +1,4 @@
+*.pkl
+tests/*
+weights/*
+perfs/*
