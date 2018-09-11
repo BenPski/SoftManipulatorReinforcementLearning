@@ -48,10 +48,10 @@ class Tester(object):
             print(self.target)
             self.env = EW.DynamicReaching(self.manip, self.target, tipOnly = self.tip)
         elif self.task == 'varTarg':
-            self.env = EW.VariableTarget(self.manip, self.dynamic_workspace, tipOnly = tip)
+            self.env = EW.VariableTarget(self.manip, self.dynamic_workspace, tipOnly = self.tip)
         elif self.task == 'varTraj':
             self.tau = float(self.config['Task']['tau'])
-            self.env = EW.VariableTrajectory(self.manip, self.static_workspace, self.tau, tipOnly = tip)
+            self.env = EW.VariableTrajectory(self.manip, self.static_workspace, self.tau, tipOnly = self.tip)
 
 
         self.actor_hidden = self.config['Networks']['actor_hidden']
