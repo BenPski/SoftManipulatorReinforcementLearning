@@ -51,9 +51,10 @@ dynamicWorkspaceTCA = getDynamicWorkspace(manipTCA,staticWorkspaceTCA,tca_dynami
 
 
 #the more convenient things to be exporting and using
-workspaces = {'cable_static':staticWorkspaceCable,
-              'cable_dynamic':dynamicWorkspaceCable,
-              'tca_static':staticWorkspaceTCA,
-              'tca_dynamic':dynamicWorkspaceTCA}
+workspaces = {'cable':{'static':staticWorkspaceCable, 
+                       'dynamic':dynamicWorkspaceCable}, 
+              'tca':{'static':staticWorkspaceTCA, 
+                     'dynamic':dynamicWorkspaceTCA}
+              }
 
 manips = {'cable':manipCable, 'tca':manipTCA}

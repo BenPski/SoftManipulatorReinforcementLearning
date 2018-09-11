@@ -1,4 +1,5 @@
-from keras.callbacks import Callback
+#from keras.callbacks import Callback
+from rl.callbacks import Callback
 import numpy as np
 
 
