@@ -1,6 +1,6 @@
 # SoftManipulatorReinforcementLearning
 
-This provides the code used for the reinforcement learning testing and training with soft manipulators. It depends on Keras-RL, tensorflow, numpy, and SoftManipulatorDynamics. 
+This provides the code used for the reinforcement learning testing and training with soft manipulators. It mainly depends on Keras-rl and [SoftManipulatorDynamics](https://github.com/BenPski/SoftManipulatorDynamics). The other dependencies include tensorflow (at least that is what I use as the backend), numpy, and matplotlib. It seems that it is the easiest to set this up as an anaconda environment with python3.5 (I don't quite remember why 3.5 specifically, I could be wrong as well). A bit of the dependencies have to be adjusted, but it should be easy enough to get that working.
 
 Due to the dependence on the manipuator dynamics it needs to connect with Matlab, to do this the [Matlab python api](https://www.mathworks.com/help/matlab/matlab-engine-for-python.html). If you use anaconda to manage your python environments then this can be a bit tricky to setup due to needing to know where to install the libraries.
 
