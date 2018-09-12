@@ -22,9 +22,9 @@ if __name__ == "__main__":
     files = []
     for manip in ['cable','tca']:
         for state in ['tip','both']:
-            for task in ['dynReach','varTarg']:
+            for task in ['varTarg']:
                 name = manip+'_'+state+'_'+task
                 files = files + ['./tests/'+i for i in os.listdir('tests/') if name in i]
                 
-    with multiprocessing.Pool() as p:
+    with multiprocessing.Pool(4) as p:
         p.map(test_process, files)

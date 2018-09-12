@@ -12,9 +12,10 @@ import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Testing a learned policy")
     parser.add_argument('config', metavar='config',type=str,help='The config that stores a tests data')
+    parser.add_argument('--render', action='store_true',default=False)
 
     args = parser.parse_args()
 
     test = ConfigHandler.fromFile(args.config)
 
-    test.run_test(save=True)
+    test.run_test(save=True,render=args.render)

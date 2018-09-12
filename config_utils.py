@@ -56,23 +56,32 @@ class ConfigHandler(object):
         self.state = self.config['State']['state']
         self.tip = self.state == 'tip'
         
-        #load task
+        #load training info
+        self.samples = int(self.config['Training']['samples'])
+        self.train_steps = int(self.config['Training']['steps'])
+        self.train_bound = float(self.config['Training']['bound'])
+        
+        #load task, also loading task dependent params
         self.task = self.config['Task']['task']
         if self.task == 'dynReach':
+            self.train_terminal = float(self.config['Training']['terminal'])
+            self.test_terminal = float(self.config['Test']['terminal'])
             self.target = self.config['Task']['target']
             self.target = np.array(list(map(float,self.target.strip('[').strip(']').split())))
-            self.env = EW.DynamicReaching(self.manip, self.target, tipOnly = self.tip)
+            self.env = EW.DynamicReaching(self.manip, self.target, tipOnly = self.tip, bound = self.train_bound, terminal = self.train_terminal)
+
         elif self.task == 'varTarg':
-            self.env = EW.VariableTarget(self.manip, self.dynamicWorkspace, tipOnly = self.tip)
+            self.train_terminal = float(self.config['Training']['terminal'])
+            self.test_terminal = float(self.config['Test']['terminal'])
+            self.env = EW.VariableTarget(self.manip, self.dynamicWorkspace, tipOnly = self.tip, bound = self.train_bound, terminal = self.train_terminal)
+            
         elif self.task == 'varTraj':
             self.tau = float(self.config['Task']['tau'])
-            self.env = EW.VariableTrajectory(self.manip, self.staticWorkspace, self.tau, tipOnly = self.tip)
+            self.env = EW.VariableTrajectory(self.manip, self.staticWorkspace, self.tau, tipOnly = self.tip, bound = self.train_bound)
+            
         else:
             raise ArgumentError('Task name not recognized')
             
-        #load training info
-        self.samples = int(self.config['Training']['samples'])
-        self.steps = int(self.config['Training']['steps'])
         
         #load networks
         self.actor_hidden = self.config['Networks']['actor_hidden']
@@ -88,7 +97,8 @@ class ConfigHandler(object):
         if os.path.isfile(self.weights_location[:-4]+'_actor.h5f'):
             self.agent.load_weights(self.weights_location)
         
-        #load perfs
+        #load test info
+        self.test_steps = int(self.config['Test']['steps'])
         self.perf_location = self.config['Test']['perf_location']
         if os.path.isfile(self.perf_location):
             with open(self.perf_location,'rb') as f:
@@ -98,7 +108,7 @@ class ConfigHandler(object):
                 
             
     @classmethod
-    def setupNew(cls,manip,state,task,training_info,network_info):
+    def setupNew(cls,manip,state,task,training_info,testing_info,network_info):
         """
         generate a new config from the given parameters
         """
@@ -111,20 +121,26 @@ class ConfigHandler(object):
         #state
         config['State'] = {'state':state}
         
-        #task
+        #task, training, and testing
         if task == 'dynReach':
             target = getTarget(workspaces[manip]['static'], workspaces[manip]['dynamic'])
             config['Task'] = {'target': target, 'task': task}
+            config['Training'] = {'samples': training_info['samples'], 'steps':training_info['steps'], 'bound':training_info['bound'], 'terminal':training_info['terminal']}
+            config['Test'] = {'steps': testing_info['steps'], 'terminal':testing_info['terminal']}
         elif task == 'varTarg':
             config['Task'] = {'task':task}
+            config['Training'] = {'samples': training_info['samples'], 'steps':training_info['steps'], 'bound':training_info['bound'], 'terminal':training_info['terminal']}
+            config['Test'] = {'steps': testing_info['steps'], 'terminal':testing_info['terminal']}
         elif task == 'varTraj':
             tau = manips[manip].dt*training_info['steps'] #need to generalize somehow
             config['Task'] = {'tau':tau, 'task':task}
+            config['Training'] = {'samples': training_info['samples'], 'steps':training_info['steps'], 'bound':training_info['bound']}
+            config['Test'] = {'steps': testing_info['steps']}
         else:
             raise ArgumentError("Don't recongnize the task "+task)
             
         #training
-        config['Training'] = {'samples': training_info['samples'], 'steps':training_info['steps']}
+        #config['Training'] = {'samples': training_info['samples'], 'steps':training_info['steps'], 'bound':training_info['bound'], 'terminal':training_info['terminal']}
             
         #network
         config['Networks'] = {'actor_hidden': network_info['actor_hidden'],
@@ -142,7 +158,7 @@ class ConfigHandler(object):
         
         config['Networks']['weights_location'] = weights_location
         
-        config['Test'] = {'perf_location':perf_location}
+        config['Test']['perf_location'] = perf_location
         
         return cls(config,config_location)
         
@@ -160,7 +176,7 @@ class ConfigHandler(object):
             #is this the right way of handling errors?
             raise ArgumentError("The given config file does not exist")
         
-        return cls(fill_empty(config),config_file)._fix_locations()
+        return cls(fix_config(config),config_file)
     
     def save(self,weights=False,perf=False):
         #save the relevant data
@@ -188,11 +204,13 @@ class ConfigHandler(object):
         
         if perf:
             with open(self.perf_location,'wb') as f:
-                pickle.dump(perf,f)
+                pickle.dump(self.perf,f)
+                
+        return self #incase want to iterate more
             
     def run_train(self,save=False):
         #simply run the fitting process
-        self.agent.fit(self.env, nb_steps=self.samples, visualize=False, verbose=2, nb_max_episode_steps=self.steps)
+        self.agent.fit(self.env, nb_steps=self.samples, visualize=False, verbose=2, nb_max_episode_steps=self.train_steps)
 
         if save:
             self.save(weights=True)
@@ -201,15 +219,16 @@ class ConfigHandler(object):
     
     def run_test(self, save=False, render=False):
         #run the tests
-
+        
         if self.task == 'dynReach':
 
             #for dynamic reaching just want to see if the target is reached
+            self.env.terminal = self.test_terminal
             obs = self.env.reset()
             if render:
                 self.env.render()
             reached = False
-            for _ in range(100):
+            for _ in range(self.test_steps):
                 a = self.agent.forward(obs)
                 obs, reward, terminal, _ = self.env.step(a)
                 if render:
@@ -223,7 +242,7 @@ class ConfigHandler(object):
         elif self.task == 'varTarg':
 
             #for variable target want to try several points to see how it performs
-
+            self.env.terminal = self.test_terminal
             reaches = 0
             errs = []
             for sample in range(100):
@@ -234,7 +253,7 @@ class ConfigHandler(object):
                 self.env.setGoal(target)
                 if render:
                     self.env.render()
-                for _ in range(100):
+                for _ in range(self.test_steps):
                     a = self.agent.forward(obs)
                     obs, reward, terminal , _ = self.env.step(a)
                     if render:
@@ -243,9 +262,9 @@ class ConfigHandler(object):
                         reaches += 1
                         reached = True
                         break
-                if not reached:
-                    pos_err = np.linalg.norm(obs[:3]-obs[6:9]) #the last tip error
-                    errs.append(pos_err/0.04) #normalized by length
+                #measure all tip errors
+                pos_err = np.linalg.norm(obs[:3]-obs[6:9]) #the last tip error
+                errs.append(pos_err/0.04) #normalized by length
 
             self.perf = (reaches,np.mean(errs))
 
@@ -253,8 +272,8 @@ class ConfigHandler(object):
 
             #want to see how well a circle can be tracked
 
-            z,r = selectTrajectoryParams(self.static_workspace)
-            steps = 500
+            z,r = selectTrajectoryParams(self.staticWorkspace)
+            steps = self.test_steps
             w = 2*np.pi/steps
             circle = lambda t: np.array([r*np.cos(w*t),r*np.sin(w*t),z])
             circle_vel = lambda t: np.array([-r*w*np.sin(w*t),w*r*np.cos(w*t),0])
@@ -298,18 +317,19 @@ class ConfigHandler(object):
             uu = str(uuid.uuid4())
             self.weights_location = './weights/' + base_name + '_' + uu + '.h5f'
             self.perf_location = './perfs/' + base_name + '_' + uu + 'pkl'
-            self.config['Networks']['weights_location'] = weights_location
-            self.config['Test']['perf_location'] = perf_location
+            self.config['Networks']['weights_location'] = self.weights_location
+            self.config['Test']['perf_location'] = self.perf_location
         elif weights_location == '': #likely won't happen
             #get uuid from perf
             uu = perf_location.strip('.pkl').split('_')[-1]
             self.weights_location = './weights/' + base_name + '_' + uu + '.h5f'
-            self.config['Networks']['weights_location'] = weights_location
+            self.config['Networks']['weights_location'] = self.weights_location
         elif perf_location == '':
             #get uuid from weights
             uu = weights_location.strip('.h5f').split('_')[-1]
             self.perf_location = './perfs/' + base_name + '_' + uu + '.pkl'
-            self.config['Test']['perf_location'] = perf_location
+            self.config['Test']['perf_location'] = self.perf_location
+        self.save()
         return self
                
 def fill_empty(config):
@@ -319,6 +339,45 @@ def fill_empty(config):
     if 'Training' not in config:
         config['Training'] = {'samples':0, 'steps':0}
     return config
+
+def fix_config(config):
+    #the configs keep changing and need to be updated to interface properly
+    #for this, fix the training section to have the proper steps, samples, bound, and terminal
+    #fix the test section to have the proper steps and terminal
+    
+    if config['Manipulator']['manip'] == 'cable':
+        steps = 100
+    else:
+        steps = 200
+    
+    if config['Task']['task'] == 'varTraj':
+        config['Training']['bound'] = str(30/100)
+        config['Training']['steps'] = str(steps)
+        config['Training']['samples'] = str(1000000)
+        
+        config['Test']['steps'] = str(500)
+        
+    elif config['Task']['task'] == 'varTarg':
+        config['Training']['samples'] = str(200000)
+        config['Training']['steps'] = str(steps)
+        config['Training']['bound'] = str(30/100)
+        config['Training']['terminal'] = str(2/100)
+        
+        config['Test']['steps'] = str(steps)
+        config['Test']['terminal'] = str(5/100)
+        
+    else:
+        config['Training']['samples'] = str(50000)
+        config['Training']['steps'] = str(steps)
+        config['Training']['bound'] = str(30/100)
+        config['Training']['terminal'] = str(2/100)
+        
+        config['Test']['steps'] = str(steps)
+        config['Test']['terminal'] = str(5/100)
+        
+    return config
+        
+        
     
 def getTarget(staticWorkspace, dynamicsWorkspace, perturb=1e-3):
     """

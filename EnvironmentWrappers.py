@@ -114,7 +114,7 @@ class EnvironmentWrapper(gym.Env, metaclass=ABCMeta):
         """
         max_q = self.manipulator.max_q
 
-        action_space = spaces.Box(low = np.array([0,0,0]), high = max_q*np.array([1,1,1]))
+        action_space = spaces.Box(low = np.array([0,0,0]), high = max_q*np.array([1,1,1]), dtype=np.float32)
         return action_space
 
 
@@ -155,10 +155,11 @@ class DynamicReaching(EnvironmentWrapper):
     can change between only tip state and tip and mid state
     """
 
-    def __init__(self, manipulator, target, tipOnly=True, rewardScale=100):
+    def __init__(self, manipulator, target, tipOnly=True, bound = 30/100, terminal = 2/100):
         self.target = target #the target goal
         self.tipOnly = tipOnly
-        self.rewardScale = rewardScale
+        self.bound = bound #the boundary percentage
+        self.terminal = terminal #the terminal percentage
 
         #defining observation_space
         angle_low = [-np.pi]*3
@@ -170,9 +171,9 @@ class DynamicReaching(EnvironmentWrapper):
         high_vel = [10]*6
 
         if self.tipOnly:
-            observation_space = spaces.Box(low = np.array(angle_low+pos_low+low_vel), high = np.array(angle_high+pos_high+high_vel))
+            observation_space = spaces.Box(low = np.array(angle_low+pos_low+low_vel), high = np.array(angle_high+pos_high+high_vel), dtype=np.float32)
         else: #return tip and mid
-            observation_space = spaces.Box(low = np.array((angle_low+pos_low+low_vel)*2), high = np.array((angle_high+pos_high+high_vel)*2))
+            observation_space = spaces.Box(low = np.array((angle_low+pos_low+low_vel)*2), high = np.array((angle_high+pos_high+high_vel)*2), dtype=np.float32)
 
         super().__init__(manipulator,observation_space)
 
@@ -216,8 +217,8 @@ class DynamicReaching(EnvironmentWrapper):
         tip = g[-1,9:12]
         dist = np.linalg.norm(tip-self.getGoal())
         #return self.rewardScale*dist
-        bound = 0.04*(30/100)
-        if dist <=bound:
+        bound = 0.04*self.bound
+        if dist <= bound:
             return -dist/bound
         else:
             return -1
@@ -228,7 +229,7 @@ class DynamicReaching(EnvironmentWrapper):
         tip = g[-1,9:12]
         dist = np.linalg.norm(tip-self.getGoal())
 
-        return dist<0.04*(2/100) #withing _ percent tip error
+        return dist<0.04*self.terminal #withing _ percent tip error
         #return False
 
 
@@ -237,10 +238,11 @@ class VariableTarget(EnvironmentWrapper):
     This type of environment will vary the target goal randomly
     """
 
-    def __init__(self,manipulator, workspace, tipOnly=True, rewardScale = 100):
+    def __init__(self,manipulator, workspace, tipOnly=True, bound = 30/100, terminal = 2/100):
         self.workspace = workspace #workspace to sample goal from
         self.tipOnly = tipOnly
-        self.rewardScale = rewardScale
+        self.bound= bound
+        self.terminal = terminal
 
         #defining observation_space
         angle_low = [-np.pi]*3
@@ -254,9 +256,9 @@ class VariableTarget(EnvironmentWrapper):
         #include the goal into the observation space
 
         if self.tipOnly:
-            observation_space = spaces.Box(low = np.array(pos_low + angle_low+pos_low+low_vel), high = np.array(pos_high + angle_high+pos_high+high_vel))
+            observation_space = spaces.Box(low = np.array(pos_low + angle_low+pos_low+low_vel), high = np.array(pos_high + angle_high+pos_high+high_vel), dtype=np.float32)
         else: #return tip and mid
-            observation_space = spaces.Box(low = np.array(pos_low + (angle_low+pos_low+low_vel)*2), high = np.array(pos_high + (angle_high+pos_high+high_vel)*2))
+            observation_space = spaces.Box(low = np.array(pos_low + (angle_low+pos_low+low_vel)*2), high = np.array(pos_high + (angle_high+pos_high+high_vel)*2), dtype=np.float32)
 
         super().__init__(manipulator,observation_space)
 
@@ -305,7 +307,7 @@ class VariableTarget(EnvironmentWrapper):
         g = state['g']
         tip = g[-1,9:12]
         dist = np.linalg.norm(tip-self.getGoal())
-        bound = 0.04*(30/100)
+        bound = 0.04*self.bound
         if dist <= bound:
             return -dist/bound
         else:
@@ -319,7 +321,7 @@ class VariableTarget(EnvironmentWrapper):
         dist = np.linalg.norm(tip-self.getGoal())
 
 
-        return dist<0.04*(2/100)
+        return dist<0.04*self.terminal
 
     def genGoal(self):
         goal = self.workspace.sample()
@@ -336,11 +338,11 @@ class VariableTrajectory(EnvironmentWrapper):
     may be useful to augment the workspace a bit to gaurantee that the trajectory is in a reasonable location
     """
 
-    def __init__(self,manipulator, workspace, tau, tipOnly=True, rewardScale = 100):
+    def __init__(self,manipulator, workspace, tau, tipOnly=True, bound = 30/100):
         self.manipulator = manipulator #I thought this would occur in the call to super()
         self.workspace = workspace #workspace to sample goal from
         self.tipOnly = tipOnly
-        self.rewardScale = rewardScale
+        self.bound = bound
 
         self.manualGoal = False #be able to manually set the goal
 
@@ -357,9 +359,9 @@ class VariableTrajectory(EnvironmentWrapper):
         #include the goal into the observation space, the goal is a position and velocity
 
         if self.tipOnly:
-            observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + angle_low+pos_low+low_vel), high = np.array(pos_high + high_vel[:3] + angle_high+pos_high+high_vel))
+            observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + angle_low+pos_low+low_vel), high = np.array(pos_high + high_vel[:3] + angle_high+pos_high+high_vel), dtype=np.float32)
         else: #return tip and mid
-            observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + (angle_low+pos_low+low_vel)*2), high = np.array(pos_high + high_vel[:3] + (angle_high+pos_high+high_vel)*2))
+            observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + (angle_low+pos_low+low_vel)*2), high = np.array(pos_high + high_vel[:3] + (angle_high+pos_high+high_vel)*2), dtype=np.float32)
 
         #the parameters for the trajectory definition
         self.tau = tau
@@ -441,7 +443,7 @@ class VariableTrajectory(EnvironmentWrapper):
         g = state['g']
         tip = g[-1,9:12]
         dist = np.linalg.norm(tip-self.getGoal()[:3])
-        bound = 0.04*(30/100)
+        bound = 0.04*self.bound
 
         if dist<=bound:
             return -dist/bound

@@ -26,7 +26,7 @@ def generateAgent(env, actor_hidden, actor_act, critic_hidden, critic_act):
         x = Activation(critic_act)(x)
     x = Dense(1)(x)
     x = Activation('linear')(x)
-    critic = Model(input=[action_input, observation_input], output=x)
+    critic = Model(inputs=[action_input, observation_input], outputs=x)
 
     memory = SequentialMemory(limit=500000, window_length=1)
     random_process = rl.random.OrnsteinUhlenbeckProcess(size=nb_actions, theta=.15, mu=0., sigma=.3)
