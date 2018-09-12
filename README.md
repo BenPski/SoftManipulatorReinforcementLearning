@@ -30,7 +30,7 @@ where MATLABROOT is the matlab location looked up before.
 
 Now we can install the api into the desired environment, for this the directory structure can be quite varied, so you'll have to figure out the relevant paths.
 ```bash
-python build --build_dir="SOMEWHERE ELSE" install --prefix="ANACONDA/envs/PY_ENV"
+python setup.py build --build-base="SOMEWHERE ELSE" install --prefix="ANACONDA/envs/PY_ENV"
 ```
 Now, if you don't have root/admin access specifying a build-dir is likely necessary, it can be anywhere (like Downloads) and then just deleted later. The prefix then states where the library should be saved to. In this case it needs to be stored in the relevant anaconda environment. The PY_ENV should be the same as used before and ANACONDA is wherever your anaconda directory is, it could be named "anaconda" or "anaconda3" (for example on linux it would be "~/anaconda3/").
 
