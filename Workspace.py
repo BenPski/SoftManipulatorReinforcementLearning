@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 """
@@ -50,14 +51,27 @@ class Workspace(object):
             p = np.random.uniform(self.min,self.max)
         return p
 
-    def plot(self):
+    def plot(self,ax=None,color='b'):
         #generate a plot of the hull
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
         for s in self.hull.simplices:
             s = np.append(s,s[0])
-            ax.plot(self.points[s,0], self.points[s,1], self.points[s,2])
-        plt.show()
+            ax.plot(self.points[s,0], self.points[s,1], self.points[s,2], color=color, alpha=0.3)
+        #plt.show()
+        return ax
+        
+    def surface(self,ax=None,color='b',alpha=0.2):
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+        p = Poly3DCollection([self.hull.points[face] for face in self.hull.simplices], alpha=alpha)
+        p.set_facecolor(color)
+        ax.add_collection3d(p)
+        
+        return ax
+        
 
 
 def makeStaticManipulatorWorkspace(manip, SAMPLES = 100, STEPS = 100):
