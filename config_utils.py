@@ -25,6 +25,8 @@ import pickle
 import multiprocessing
 import subprocess
 
+import pathlib
+
 
 class ConfigHandler(object):
     """
@@ -150,11 +152,16 @@ class ConfigHandler(object):
 
         
         #generate the file locations, save config with time stamp, give weights and perf the same uuid
+        
         base_name = manip+'_'+state+'_'+task
-        config_location = './test/' + base_name + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.ini'
+        #config_location = './tests/' + base_name + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.ini'
+        #haven't decided a config location yet, do that when saving
+        config_location = None
+                    
+            
         uu = str(uuid.uuid4())
         weights_location = './weights/' + base_name + '_' + uu + '.h5f'
-        perf_location = './perfs/' + base_name + '_' + uu + 'pkl'
+        perf_location = './perfs/' + base_name + '_' + uu + '.pkl'
         
         config['Networks']['weights_location'] = weights_location
         
@@ -196,6 +203,21 @@ class ConfigHandler(object):
             pass
         
         #save the config, may be excessive at some point
+        #if a location has yet to be established for the config generate a location
+        #want to make sure the timestamp is unique since there could be a collision
+        #I have no idea if this will actually deal with the name collision, but it'll be close
+        #better bet could be saving files in a seperate location from each other and then moving them all back together, but that likely requires a much more defined manager of configs
+        if self.config_location is None:
+            base_name = self.manip_name+'_'+self.state+'_'+self.task
+            self.config_location = './tests/' + base_name + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.ini'
+            touched = False
+            while not touched:
+                p = pathlib.Path(self.config_location)
+                try:
+                    p.touch(exist_ok=False)
+                    touched = True
+                except:
+                    self.config_location = './tests/' + base_name + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.ini'
         with open(self.config_location,'w') as f:
             self.config.write(f)
             
@@ -212,8 +234,7 @@ class ConfigHandler(object):
         #simply run the fitting process
         self.agent.fit(self.env, nb_steps=self.samples, visualize=False, verbose=2, nb_max_episode_steps=self.train_steps)
 
-        if save:
-            self.save(weights=True)
+        self.save(weights=save)
 
         return self 
     
@@ -297,8 +318,7 @@ class ConfigHandler(object):
 
             self.perf = errs
 
-        if save:
-            self.save(perf=True)
+        self.save(perf=save)
 
         return self
             
