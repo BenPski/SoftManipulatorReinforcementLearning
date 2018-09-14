@@ -50,7 +50,7 @@ def dynReachPerfs():
     print("Cable & Tip: ", shower(cable_tip))
     print("Cable & Both: ", shower(cable_both))
     print("TCA & Tip: ", shower(tca_tip))
-    print("Cable & Tip: ", shower(tca_both))
+    print("TCA & Both: ", shower(tca_both))
     print()
     
 def varTargPerfs():
@@ -64,13 +64,13 @@ def varTargPerfs():
     cable_tip, cable_both, tca_tip, tca_both = collectPerfs('varTarg')
             
     mean = lambda xs: sum(xs)/len(xs)
-    shower = lambda xs: str(mean(list([i[0] for i in xs]))) + ", " + str(100*mean(list(i[1] for i in xs))) + "%"
+    shower = lambda xs: str(mean(list([i[0] for i in xs]))) + ", " + str(100*mean(list(i[1] for i in xs))) + "%" + " | Best " + str(max(xs)) + " | Worst " + str(min(xs))
     
     print("Results of Variable Target Learning:")
     print("Cable & Tip: ", shower(cable_tip))
     print("Cable & Both: ", shower(cable_both))
     print("TCA & Tip: ", shower(tca_tip))
-    print("Cable & Tip: ", shower(tca_both))
+    print("TCA & Both: ", shower(tca_both))
     print()
     
 def varTrajPerfs():
