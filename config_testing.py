@@ -42,13 +42,15 @@ the training
     samples 
 """
 
-from abc import ABC,abstractmethod
+from abc import ABCMeta,abstractmethod
 from manipAndWorkspace import workspaces
 import Manipulators as M
 import EnvironmentWrappers as EW
 import configparser
 import os
 import pickle
+import uuid
+import numpy as np
 
 
 #will be useful for combining configs        
@@ -63,7 +65,7 @@ def combineDict(a,b):
 #the sum types map to several classes with a unified superclass
 
 #Manipulator
-class ManipType(ABC):
+class ManipType(object, metaclass=ABCMeta):
     @abstractmethod
     def manip_start(self,n,dt,max_q):
         pass
@@ -149,7 +151,10 @@ class Storage():
     
 
 #task
-class TaskTest(): pass
+class TaskTest(object, metaclass=ABCMeta): pass
+#    @abstractmethod
+#    def train(self,env,agent,staticWorkspace,dynamicWorkspace,render=False):
+#        pass
 class TaskTrain(): pass
     
 class DynReachTrain(TaskTrain):
@@ -161,10 +166,27 @@ class DynReachTrain(TaskTrain):
     def getConfig(self):
         return self.__dict__
 class DynReachTest(TaskTest):
-    def __init__(self, terminal):
+    def __init__(self, steps, terminal):
+        self.steps = steps
         self.terminal = terminal
     def getConfig(self):
         return self.__dict__
+    def test(self, env, agent, staticWorkspace, dynamicWorkspace, render=False):
+        env.terminal = self.terminal
+        obs = env.reset()
+        if render:
+            env.render()
+        reached = False
+        for _ in range(self.steps):
+            a = agent.forward(obs)
+            obs, reward, terminal, _ = env.step(a)
+            if render:
+                env.render()
+            if terminal:
+                reached = True
+                break
+        return reached
+
 
 class VarTargTrain(TaskTrain):
     def __init__(self, steps, samples, bound, terminal):
@@ -175,12 +197,35 @@ class VarTargTrain(TaskTrain):
     def getConfig(self):
         return self.__dict__
 class VarTargTest(TaskTest):
-    def __init__(self, samples, repeat, terminal):
-        self.samples = samples
+    def __init__(self, steps, repeat, terminal):
+        self.steps = steps
         self.repeat = repeat
         self.terminal = terminal
     def getConfig(self):
         return self.__dict__
+    def test(self, env, agent, _, workspace, render=False):
+        env.terminal = self.terminal
+        reaches = 0
+        errs = []
+        for sample in range(self.repeat):
+            target = workspace.sample()
+            obs = env.reset()
+            obs[:3] = target
+            env.setGoal(target)
+            if render:
+                env.render()
+            for _ in range(self.steps):
+                a = agent.forward(obs)
+                obs, reward, terminal, _ = env.step(a)
+                if render:
+                    env.render()
+                if terminal:
+                    reaches += 1
+                    break
+            pos_err = np.linalg.norm(obs[:3]-obs[6:9])
+            errs.append(pos_err/0.04)
+        return (reaches, np.mean(errs))
+        
     
 class VarTrajTrain(TaskTrain):
     def __init__(self, steps, samples, bound):
@@ -194,6 +239,30 @@ class VarTrajTest(TaskTest):
         self.steps = steps
     def getConfig(self):
         return self.__dict__
+    def train(self, env, agent, workspace, _, render = False):
+        z,r = selectTrajectoryParams(workspace)
+        steps = self.steps 
+        w = 2*np.pi/steps
+        circle = lambda t: np.array([r*np.cos(w*t),r*np.sin(w*t),z])
+        circle_vel = lambda t: np.array([-r*w*np.sin(w*t),w*r*np.cos(w*t),0])
+        env.manualGoal = True
+        obs = env.reset()
+        if render:
+            env.render()
+        errs = []
+        for t in range(steps):
+            pos = circle(t)
+            vel = circle_vel(t)
+            goal = np.concatenate([pos,vel])
+            env.setGoal(goal)
+            obs[:6] = goal
+            a = agent.forward(obs)
+            obs, _, _, _ = env.step(a)
+            if render:
+                env.render()
+            errs.append(np.linalg.norm(goal[:3]-obs[6:9])/0.04)
+        return errs
+
 
 class TaskType(): pass
 class TaskDynamicReaching(TaskType): 
@@ -270,13 +339,60 @@ class Config():
         
         return cls(manip, task, network, locations)
     
+    @classmethod
+    def setup(cls,act_type, task_type,state_measure,train_steps,train_samples,train_bound,test_steps, actor_act,actor_hidden,critic_act,critic_hidden, **kwargs):
+        """
+        Setting up a config from given parameters
+        
+        assumes some default values
+        
+        kwargs are necessary for the variability in the task specification
+        """
+        if act_type == 'cable':
+            manip = Manip(10,0.01,0.3,ManipCable())
+        elif act_type == 'tca':
+            manip = Manip(5,0.5,3,ManipTCA())
+        else:
+            raise Exception("Didn't recognize the given actuator type")
+            
+        if task_type == 'dynReach':
+            train_terminal = kwargs['train_terminal']
+            test_terminal = kwargs['test_terminal']
+            train = DynReachTrain(train_steps, train_samples, train_bound, train_terminal)
+            test = DynReachTest(test_steps, test_terminal)
+            point = getTarget(manip.manipType.staticWorkspace,manip.manipType.dynamicWorkspace)
+            task = TaskDynamicReaching(point,train,test)
+        elif task_type == 'varTarg':
+            test_repeat = kwargs['test_repeat']
+            train = VarTargTrain(train_steps, train_samples, train_bound, train_terminal)
+            test = VarTargTest(test_steps, test_repeat, test_terminal)
+            task = TaskVariableTarget(train,test)
+        elif task_type == 'varTraj':
+            train = VarTrajTrain(train_steps, train_samples, train_bound)
+            test = VarTrajTest(test_steps)
+            task = TaskVariableTrajectory(train,test)
+        else:
+            raise Exception("Didn't recognize the given task type")
+            
+        task = Task(state_measure, task)
+            
+        actor = Network(actor_act, actor_hidden)
+        critic = Network(critic_act, critic_hidden)
+        network = RLNetworks(actor, critic)
+        
+        #generate uuid
+        uu = str(uuid.uuid4())
+        locations = Storage(uu)
+        
+        return cls(manip,task,network,locations)
+    
     def getEnv(self):
-        if type(self.task) == TaskDynamicReaching:
-            return EW.DynamicReaching(self.manip.manip, self.task.point, measure_states = self.task.measure, bound = self.train.bound, terminal = self.train.terminal)
-        elif type(self.task) == TaskVariableTarget:
-            return EW.VariableTarget(self.manip.manip, self.manip.dynamicWorkspace, measure_states = self.task.measure, bound = self.train.bound, terminal = self.train.terminal)
-        elif type(self.task) == TaskVariableTrajectory:
-            return EW.VariableTrajectory(self.manip.manip, self.manip.staticWorkspace, self.manip.dt*self.task.train.steps, measures_states = self.task.measure, bound = self.train.bound)
+        if type(self.task.taskType) == TaskDynamicReaching:
+            return EW.DynamicReaching(self.manip.manip, self.task.taskType.point, measure_states = self.task.measure, bound = self.task.taskType.train.bound, terminal = self.task.taskType.train.terminal)
+        elif type(self.task.taskType) == TaskVariableTarget:
+            return EW.VariableTarget(self.manip.manip, self.manip.manipType.dynamicWorkspace, measure_states = self.task.measure, bound = self.task.taskType.train.bound, terminal = self.task.taskType.train.terminal)
+        elif type(self.task.taskType) == TaskVariableTrajectory:
+            return EW.VariableTrajectory(self.manip.manip, self.manip.manipType.staticWorkspace, self.manip.dt*self.task.taskType.train.steps, measures_states = self.task.measure, bound = self.task.taskType.train.bound)
         else:
             raise Exception("Task is of the wrong type")
         
@@ -332,13 +448,58 @@ class Config():
 
         return self 
     
-    def run_testing(self):
-        pass
+    def run_testing(self, save=False, render=False):
+        perf = self.task.test(self.env, self.agent, self.manip.manipType.staticWorkspace, self.manip.manipType.dynamicWorkspace,render=render)
+        self.perf = perf
+        self.save(perf=save)
+        return self
+        
         
     def getAgent(self):
         from network_utils import generateAgent
         agent = generateAgent(self.env,self.network.actor.hidden,self.network.actor.act_fun.name,self.network.critic.hiddens,self.network.critic.act_fun)
         return agent
+       
         
+    
+#some useful functions for workspace stuff
+def getTarget(staticWorkspace, dynamicsWorkspace, perturb=1e-3):
+    """
+    grab a point between the static and dynamic workspace
+    randomly select static vertex and perturb it, see if it is between the workspaces, repeat if not
+    """
+    
+    vertices = staticWorkspace.vertices
+    
+    while True:
+        i = np.random.randint(0,vertices.shape[0])
+        vert = vertices[i,:]
+        point = vert + np.random.uniform(-1*np.array(3*[perturb]), np.array(3*[perturb]))
         
+        if (not staticWorkspace.inside(point)) and dynamicsWorkspace.inside(point):
+            return point
 
+        
+def selectTrajectoryParams(staticWorkspace):
+    """
+    this will be the z and the r values for the trajectory tracking
+    due to the nature of the trajectories generated want to be inside the staticWorkspace
+    """
+
+    z = (staticWorkspace.max_z + staticWorkspace.min_z)/2
+    r = staticWorkspace.max_r
+
+    #want to check that the circle formed is within the boundaries of the static workspace, sample 6 rotationally symmetric points
+
+    inside = False
+    while not inside:
+        check = []
+        for i in range(6):
+            a = 2*np.pi/6*i
+            p = np.array([r*np.cos(a),r*np.sin(a),z])
+            check.append(staticWorkspace.inside(p))
+        inside = all(check)
+        if not inside:
+            r *= 0.9
+
+    return (z, r)
