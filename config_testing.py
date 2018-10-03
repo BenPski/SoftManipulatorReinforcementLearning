@@ -42,6 +42,11 @@ the training
     samples 
 """
 
+#fixes something
+import tensorflow #tensorflow has to get imported before numpy for some reason
+import numpy as np
+from network_utils import generateAgent
+
 from abc import ABCMeta,abstractmethod
 from manipAndWorkspace import workspaces
 import Manipulators as M
@@ -50,7 +55,9 @@ import configparser
 import os
 import pickle
 import uuid
-import numpy as np
+
+
+
 
 
 #will be useful for combining configs        
@@ -58,6 +65,13 @@ def combineDict(a,b):
     z = a.copy()
     z.update(b)
     return z
+
+def appendToKeys(name, d):
+    d_new = {}
+    for key, values in d.items():
+        d_new[name + key] = values
+    return d_new
+
 
 
 #these definitions came from playing around with haskell types, probably not the greatest way of doing it
@@ -164,13 +178,13 @@ class DynReachTrain(TaskTrain):
         self.bound = bound
         self.terminal = terminal
     def getConfig(self):
-        return self.__dict__
+        return appendToKeys('train_', self.__dict__)
 class DynReachTest(TaskTest):
     def __init__(self, steps, terminal):
         self.steps = steps
         self.terminal = terminal
     def getConfig(self):
-        return self.__dict__
+        return appendToKeys('test_', self.__dict__)
     def test(self, env, agent, staticWorkspace, dynamicWorkspace, render=False):
         env.terminal = self.terminal
         obs = env.reset()
@@ -195,14 +209,14 @@ class VarTargTrain(TaskTrain):
         self.bound = bound
         self.terminal = terminal
     def getConfig(self):
-        return self.__dict__
+        return appendToKeys('train_', self.__dict__)
 class VarTargTest(TaskTest):
     def __init__(self, steps, repeat, terminal):
         self.steps = steps
         self.repeat = repeat
         self.terminal = terminal
     def getConfig(self):
-        return self.__dict__
+        return appendToKeys('test_', self.__dict__)
     def test(self, env, agent, _, workspace, render=False):
         env.terminal = self.terminal
         reaches = 0
@@ -233,13 +247,13 @@ class VarTrajTrain(TaskTrain):
         self.samples = samples
         self.bound = bound
     def getConfig(self):
-        return self.__dict__
+        return appendToKeys('train_', self.__dict__)
 class VarTrajTest(TaskTest):
     def __init__(self, steps):
         self.steps = steps
     def getConfig(self):
-        return self.__dict__
-    def train(self, env, agent, workspace, _, render = False):
+        return appendToKeys('test_',self.__dict__)
+    def test(self, env, agent, workspace, _, render = False):
         z,r = selectTrajectoryParams(workspace)
         steps = self.steps 
         w = 2*np.pi/steps
@@ -299,7 +313,82 @@ class Task():
 # it is necessary for the config to be loadable from a file or initialized given some values
 # for now initializing from values is just the constructor
         
+def manipFromConfig(info):
+    n = int(info['n'])
+    dt = float(info['dt'])
+    max_q = float(info['max_q'])
+    manipType = info['manipType']
+    if manipType == 'cable':
+        return Manip(n,dt,max_q,ManipCable())
+    elif manipType == 'tca':
+        return Manip(n,dt,max_q,ManipTCA())
+    else:
+        raise Exception("Unrecognized manipType in config")
+        
+def taskFromConfig(info):
+    measure = int(info['measure'])
+    taskType = info['task']
+    
+    if taskType == 'dynReach':
+        train_steps = int(info['train_steps'])
+        train_samples = int(info['train_samples'])
+        train_bound = float(info['train_bound'])
+        train_terminal = float(info['train_terminal'])
+        test_steps = int(info['test_steps'])
+        test_terminal = float(info['test_terminal'])
+        point = np.array(list(map(float, info['point'].strip('[').strip(']').split())))
+        train = DynReachTrain(train_steps, train_samples, train_bound, train_terminal)
+        test = DynReachTest(test_steps, test_terminal)
+        task = TaskDynamicReaching(point, train, test)
+    elif taskType == 'varTarg':
+        train_steps = int(info['train_steps'])
+        train_samples = int(info['train_samples'])
+        train_bound = float(info['train_bound'])
+        train_terminal = float(info['train_terminal'])
+        test_steps = int(info['test_steps'])
+        test_repeat = int(info['test_repeat'])
+        test_terminal = float(info['test_terminal'])
+        train = VarTargTrain(train_steps, train_samples, train_bound, train_terminal)
+        test = VarTargTest(test_steps, test_repeat, test_terminal)
+        task = TaskVariableTarget(train, test)
+    elif taskType == 'varTraj':
+        train_steps = int(info['train_steps'])
+        train_samples = int(info['train_samples'])
+        train_bound = float(info['train_bound'])
+        test_steps = int(info['test_steps'])
+        train = VarTrajTrain(train_steps, train_samples, train_bound)
+        test = VarTrajTest(test_steps)
+        task = TaskVariableTrajectory(train,test)
+    else:
+        raise Exception("Unrecognized task in config")
+        
+    return Task(measure, task)
+    
+def stringToActFun(name):
+    if name == 'relu':
+        return Relu()
+    elif name == 'tanh':
+        return Tanh()
+    elif name == 'sigmoid':
+        return Sigmoid()
+    else:
+        raise Exception("Unrecognized act_fun")
 
+def networkFromConfig(info):
+    actor_act = info['actor_act']
+    critic_act = info['critic_act']
+    readHiddens = lambda h: list(map(int,h.strip('[').strip(']').split(',')))
+    actor_hiddens = readHiddens(info['actor_hiddens'])
+    critic_hiddens = readHiddens(info['critic_hiddens'])
+    
+    
+    actor = Network(stringToActFun(actor_act), actor_hiddens)
+    critic = Network(stringToActFun(critic_act), critic_hiddens)
+    
+    return RLNetworks(actor,critic)
+
+def locationsFromConfig(info):
+    return Storage(info['uuid'])
 
 class Config():
     def __init__(self, manip, task, network, locations):
@@ -316,7 +405,8 @@ class Config():
         
         self.perf = self.getPerf()
         
-        self.agent = None #want to avoid loading it until necessary
+        #self.agent = None #want to avoid loading it until necessary
+        self.agent = self.getAgent() #not possible to avoid some of the slow down
         self.env = self.getEnv()
         
     @classmethod    
@@ -332,10 +422,10 @@ class Config():
             #is this the right way of handling errors?
             raise Exception("The given config file does not exist")
         
-        manip = config['Manipulator'] 
-        task = config['Task']
-        network = config['Network']
-        locations = config['Locations']
+        manip = manipFromConfig(config['Manipulator'])
+        task = taskFromConfig(config['Task'])
+        network = networkFromConfig(config['Network'])
+        locations = locationsFromConfig(config['Locations'])
         
         return cls(manip, task, network, locations)
     
@@ -349,7 +439,7 @@ class Config():
         kwargs are necessary for the variability in the task specification
         """
         if act_type == 'cable':
-            manip = Manip(10,0.01,0.3,ManipCable())
+            manip = Manip(10,0.01,0.1,ManipCable())
         elif act_type == 'tca':
             manip = Manip(5,0.5,3,ManipTCA())
         else:
@@ -363,7 +453,9 @@ class Config():
             point = getTarget(manip.manipType.staticWorkspace,manip.manipType.dynamicWorkspace)
             task = TaskDynamicReaching(point,train,test)
         elif task_type == 'varTarg':
+            train_terminal = kwargs['train_terminal']
             test_repeat = kwargs['test_repeat']
+            test_terminal = kwargs['test_terminal']
             train = VarTargTrain(train_steps, train_samples, train_bound, train_terminal)
             test = VarTargTest(test_steps, test_repeat, test_terminal)
             task = TaskVariableTarget(train,test)
@@ -433,7 +525,7 @@ class Config():
         
         if perf:
             with open(self.locations.perf_location(),'wb') as f:
-                pickle.dump(self.getPerf(),f)
+                pickle.dump(self.perf,f)
                 
         return self #incase want to iterate more
 
@@ -442,22 +534,23 @@ class Config():
         if self.agent is None:
             self.agent = self.getAgent()
             
-        self.agent.fit(self.env, nb_steps=self.task.train.samples, visualize=False, verbose=2, nb_max_episode_steps=self.train.steps)
+        self.agent.fit(self.env, nb_steps=self.task.taskType.train.samples, visualize=False, verbose=2, nb_max_episode_steps=self.task.taskType.train.steps)
 
         self.save(weights=save)
 
         return self 
     
     def run_testing(self, save=False, render=False):
-        perf = self.task.test(self.env, self.agent, self.manip.manipType.staticWorkspace, self.manip.manipType.dynamicWorkspace,render=render)
+        if self.agent is None:
+            self.agent = self.getAgent()
+        perf = self.task.taskType.test.test(self.env, self.agent, self.manip.manipType.staticWorkspace, self.manip.manipType.dynamicWorkspace,render=render)
         self.perf = perf
         self.save(perf=save)
         return self
         
         
     def getAgent(self):
-        from network_utils import generateAgent
-        agent = generateAgent(self.env,self.network.actor.hidden,self.network.actor.act_fun.name,self.network.critic.hiddens,self.network.critic.act_fun)
+        agent = generateAgent(self.env,self.network.actor.hiddens,self.network.actor.act_fun.name,self.network.critic.hiddens,self.network.critic.act_fun.name)
         return agent
        
         
