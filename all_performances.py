@@ -20,7 +20,7 @@ def test_process(f):
 
 if __name__ == "__main__":
     files = []
-    for manip in ['cable','tca']:
+    for manip in ['tca']:
         for state in ['tip','both']:
             for task in ['varTarg']:
                 name = manip+'_'+state+'_'+task

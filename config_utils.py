@@ -44,6 +44,8 @@ class ConfigHandler(object):
         #then the data should be extracted out of it 
         #that means the classmethods should be setting up the config their own way
         
+        #could switch over to storing uuid for the files rather than just sticking them on the files
+        
         self.config = config
         self.config_location = config_location
 
@@ -108,6 +110,8 @@ class ConfigHandler(object):
         else:
             self.perf = None
                 
+    def _load_manip_workspace(self):
+        pass
             
     @classmethod
     def setupNew(cls,manip,state,task,training_info,testing_info,network_info):
@@ -464,3 +468,36 @@ def getPerformance(manip,state,task,render=False):
     with multiprocessing.Pool() as p:
         p.map(test_process,files)
     
+def clearOrphanedFiles():
+    """
+    go through the configs that are saved and establish what are the relevant weights and performance files
+    remove any weights and performances that do not have an associated config
+    """
+    
+    uuids = [ConfigHandler.fromFile('./tests/'+i).perf_location.strip('.pkl').split('_')[-1] for i in os.listdir('./tests/')] 
+    #perfs = [ConfigHandler.fromFile('./tests/'+i).perf_location.strip('./perfs/') for i in os.listdir('./tests/')] 
+    #print(list(uuids))
+    
+    perf_files = list(os.listdir('./perfs/'))
+    weight_files = os.listdir('./weights/')
+    #print(list(set(perfs).symmetric_difference(set(perf_files))))
+    #print(list(filter(lambda f: uuids[0] in f, perf_files)))
+    #print(list(filter(lambda f: uuids[0] in f, weight_files)))
+    
+    for uu in uuids:
+        #uu = config.perf_location.strip('.pkl').split('_')[-1]
+        #remove any files that contain the uuid for the config
+        print(uu)
+        perf_files = filter(lambda f: uu not in f, perf_files)
+        weight_files = filter(lambda f: uu not in f, weight_files)
+
+    
+    #remove all the remaining files
+    for perf in perf_files:
+        print(perf)
+        #os.remove(perf)
+    for weight in weight_files:
+        print(weight)
+        #os.remove(weight)
+        
+        

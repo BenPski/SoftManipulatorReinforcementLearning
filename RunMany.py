@@ -51,5 +51,5 @@ if __name__ == "__main__":
                 
     print(processes)
     
-    with multiprocessing.Pool(6) as p:
+    with multiprocessing.Pool(4) as p:
         p.map(spawnProcess,processes)
