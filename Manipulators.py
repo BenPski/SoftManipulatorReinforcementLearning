@@ -139,10 +139,11 @@ class CableManipulator(Manipulator):
     """
 
     def initState(self):
-        xi, eta, g = self.eng.initialDynamics(self.n,nargout=3)
-        g = mat2np(g).T
-        xi = mat2np(xi).T
-        eta = mat2np(eta).T
+        g, xi, eta = self.eng.initDynamics(self.n,nargout=3)
+        #xi, eta, g = self.eng.initialDynamics(self.n,nargout=3)
+        g = mat2np(g)
+        xi = mat2np(xi)
+        eta = mat2np(eta)
         state = {'g':g, 'xi': xi, 'eta':eta}
 
         self.state = state
@@ -157,7 +158,8 @@ class CableManipulator(Manipulator):
         #print(a)
         eta = self.getState()['eta']
         xi = self.getState()['xi']
-        g,xi,eta = self.eng.fastDynamicsStable(np2mat(a),np2mat(eta),np2mat(xi),self.dt,nargout=3)
+        g,xi,eta = self.eng.dynamicsCable(np2mat(a),np2mat(eta),np2mat(xi),self.dt,nargout=3)
+        #g,xi,eta = self.eng.fastDynamicsStable(np2mat(a),np2mat(eta),np2mat(xi),self.dt,nargout=3)
         g = mat2np(g)
         xi = mat2np(xi)
         eta = mat2np(eta)
@@ -175,7 +177,8 @@ class TCAManipulator(Manipulator):
     """
 
     def initState(self):
-        g, xi, eta, tcaTemps = self.eng.initTCADynamics(self.n,nargout=4)
+        g,xi,eta,tcaTemps = self.eng.initDynamics(self.n,nargout=4)
+        #g, xi, eta, tcaTemps = self.eng.initTCADynamics(self.n,nargout=4)
         g = mat2np(g)
         xi = mat2np(xi)
         eta = mat2np(eta)
@@ -192,7 +195,8 @@ class TCAManipulator(Manipulator):
         eta = self.getState()['eta']
         xi = self.getState()['xi']
         tcaTemps = self.getState()['tcaTemps']
-        g,xi,eta,tcaTemps = self.eng.fullTCADynamics(np2mat(a),np2mat(eta),np2mat(xi),self.dt,tcaTemps,nargout=4)
+        g,xi,eta,tcaTemps = self.eng.dynamicsTCA(np2mat(a),np2mat(eta),np2mat(xi),self.dt,tcaTemps,nargout=4)
+        #g,xi,eta,tcaTemps = self.eng.fullTCADynamics(np2mat(a),np2mat(eta),np2mat(xi),self.dt,tcaTemps,nargout=4)
         g = mat2np(g)
         xi = mat2np(xi)
         eta = mat2np(eta)
