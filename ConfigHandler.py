@@ -30,6 +30,12 @@ def appendToKeys(name, d):
         d_new[name + key] = values
     return d_new
 
+def stringifyDict(d):
+    #convert all the items to strings
+    d_new = d.copy()
+    for key, value in d.items():
+        d_new[key] = str(value)
+    return d_new
 
 
 #these definitions came from playing around with haskell types, probably not the greatest way of doing it
@@ -262,7 +268,11 @@ class Task():
             train_terminal = float(info['train_terminal'])
             test_steps = int(info['test_steps'])
             test_terminal = float(info['test_terminal'])
-            point = np.array(list(map(float, info['point'].strip('[').strip(']').split())))
+            #it is possible that point is none
+            if info['point'] == 'None':
+                point = None
+            else:
+                point = np.array(list(map(float, info['point'].strip('[').strip(']').split())))
             train = DynReachTrain(train_steps, train_samples, train_bound, train_terminal)
             test = DynReachTest(test_steps, test_terminal)
             task = TaskDynamicReaching(point, train, test)
@@ -290,7 +300,8 @@ class Task():
         return cls(measure, task)
     
     def getConfig(self):
-        return combineDict({'measure': self.measure}, self.taskType.getConfig())
+        #print(combineDict({'measure': self.measure}, self.taskType.getConfig()))
+        return stringifyDict(combineDict({'measure': str(self.measure)}, self.taskType.getConfig()))
 
 
 class ConfigHandler(object):
@@ -347,7 +358,8 @@ class ConfigHandler(object):
             test_terminal = kwargs['test_terminal']
             train = DynReachTrain(train_steps, train_samples, train_bound, train_terminal)
             test = DynReachTest(test_steps, test_terminal)
-            point = getTarget(manip.manipType.staticWorkspace,manip.manipType.dynamicWorkspace)
+            #point = getTarget(manip.manipType.staticWorkspace,manip.manipType.dynamicWorkspace)
+            point = None
             task = TaskDynamicReaching(point,train,test)
         elif task_type == 'varTarg':
             train_terminal = kwargs['train_terminal']
@@ -444,22 +456,6 @@ class ConfigHandler(object):
         return self #incase want to iterate more
    
 #some useful functions for workspace stuff
-def getTarget(staticWorkspace, dynamicsWorkspace, perturb=1e-3):
-    """
-    grab a point between the static and dynamic workspace
-    randomly select static vertex and perturb it, see if it is between the workspaces, repeat if not
-    """
-    
-    vertices = staticWorkspace.vertices
-    
-    while True:
-        i = np.random.randint(0,vertices.shape[0])
-        vert = vertices[i,:]
-        point = vert + np.random.uniform(-1*np.array(3*[perturb]), np.array(3*[perturb]))
-        
-        if (not staticWorkspace.inside(point)) and dynamicsWorkspace.inside(point):
-            return point
-
         
 def selectTrajectoryParams(staticWorkspace):
     """
