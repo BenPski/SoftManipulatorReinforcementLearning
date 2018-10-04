@@ -39,3 +39,90 @@ The api should be installed to test that is worked try to open python and import
 # Getting the Manipulators Interfaced to the Libraries
 To get the code in Manipulators.py properly working the location of the SoftManipulatorDynamics needs to be known, currently the default configuration will look in the current directory. You can edit the manip_config.ini to set the location of the manipulators directory, also the program will simply fail when creating a manipulator object until the configuration is properly specified.
 
+# Usage
+The usage is pretty straightforward for the running of the experiments. It is best to operate it via RunManyExperiments which needs a config specifying what to run. An example config would look like:
+```ini
+[Exp Cable 1 DynReach]
+manip = cable
+task = dynReach
+measure = 1
+train_steps = 100
+train_samples = 20000
+train_bound = 0.3
+train_terminal = 0.05
+test_steps = 100
+test_terminal = 0.05
+replicates = 5
+
+[Exp TCA 1 DynReach]
+manip = tca
+task = dynReach
+measure = 1
+train_steps = 500
+train_samples = 100000
+train_bound = 0.3
+train_terminal = 0.05
+test_steps = 500
+test_terminal = 0.05
+replicates = 5
+
+[Exp Cable 1 VarTarg]
+manip = cable
+task = varTarg
+measure = 1
+train_steps = 100
+train_samples = 200000
+train_bound = 0.3
+train_terminal = 0.05
+test_steps = 100
+test_terminal = 0.05
+test_repeat = 100
+replicates = 5
+
+[Exp TCA 1 VarTarg]
+manip = tca
+task = varTarg
+measure = 1
+train_steps = 500
+train_samples = 1000000
+train_bound = 0.3
+train_terminal = 0.05
+test_steps = 500
+test_terminal = 0.05
+test_repeat = 100
+replicates = 5
+
+[Exp Cable 1 VarTraj]
+manip = cable
+task = varTraj
+measure = 1
+train_steps = 100
+train_samples = 2000000
+train_bound = 0.3
+test_steps = 500
+replicates = 5
+
+[Exp TCA 1 VarTraj]
+manip = tca
+task = varTarg
+measure = 1
+train_steps = 500
+train_samples = 2000000
+train_bound = 0.3
+test_steps = 500
+replicates = 5
+```
+
+Then running the experiments looks like:
+```bash
+python RunManyExperiments.py learning_experiments.ini
+```
+
+For the performances, the automation still is being implemented, but can be easily grabbed by initializing a ConfigHandler from saved configuration file and then using load_perf().
+
+```python
+from ConfigHandler import ConfigHandler
+
+config = ConfigHandler.fromFile('./test/___.ini')
+perf = config.load_perf()
+```
