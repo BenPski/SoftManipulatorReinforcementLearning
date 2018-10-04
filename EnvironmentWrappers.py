@@ -155,9 +155,9 @@ class DynamicReaching(EnvironmentWrapper):
     can change between only tip state and tip and mid state
     """
 
-    def __init__(self, manipulator, target, tipOnly=True, bound = 30/100, terminal = 2/100):
+    def __init__(self, manipulator, target, measure_states=1, bound = 30/100, terminal = 2/100):
         self.target = target #the target goal
-        self.tipOnly = tipOnly
+        self.measure_states = measure_states
         self.bound = bound #the boundary percentage
         self.terminal = terminal #the terminal percentage
 
@@ -170,10 +170,7 @@ class DynamicReaching(EnvironmentWrapper):
         low_vel = [-10]*6
         high_vel = [10]*6
 
-        if self.tipOnly:
-            observation_space = spaces.Box(low = np.array(angle_low+pos_low+low_vel), high = np.array(angle_high+pos_high+high_vel), dtype=np.float32)
-        else: #return tip and mid
-            observation_space = spaces.Box(low = np.array((angle_low+pos_low+low_vel)*2), high = np.array((angle_high+pos_high+high_vel)*2), dtype=np.float32)
+        observation_space = spaces.Box(low = np.array((angle_low+pos_low+low_vel)*self.measure_states), high = np.array((angle_high+pos_high+high_vel)*self.measure_states), dtype=np.float32)
 
         super().__init__(manipulator,observation_space)
 
@@ -193,23 +190,13 @@ class DynamicReaching(EnvironmentWrapper):
         #pick out the relevant states
         g = state['g']
         eta = state['eta']
-        if self.tipOnly:
-            R = np.array([g[-1,0:3],g[-1,3:6],g[-1,6:9]])
+        states = []
+        for i in range(self.measure_states):
+            R = np.array([g[-1-i,0:3],g[-1-i,3:6],g[-1-i,6:9]])
             angles = self.manipulator.eng.extractAngles(np2mat(R))
             angles = mat2np(angles).T[0]
-            return np.hstack([angles,g[-1,9:12],eta[-1,:]])
-        else:
-            R_tip = np.array([g[-1,0:3],g[-1,3:6],g[-1,6:9]])
-            angles_tip = self.manipulator.eng.extractAngles(np2mat(R_tip))
-            angles_tip = mat2np(angles_tip).T[0]
-            state_tip = np.hstack([angles_tip,g[-1,9:12],eta[-1,:]])
-
-            mid = self.manipulator.n//2 + 1 #might not actually be the middle
-            R_mid = np.array([g[mid,0:3],g[mid,3:6],g[mid,6:9]])
-            angles_mid = self.manipulator.eng.extractAngles(np2mat(R_mid))
-            angles_mid = mat2np(angles_mid).T[0]
-            state_mid = np.hstack([angles_mid,g[mid,9:12],eta[mid,:]])
-            return np.hstack([state_tip,state_mid])
+            states = np.hstack([angles,g[-1-i,9:12],eta[-1-i,:],states])
+        return states
 
     def getReward(self,state):
         #the reward for this case is simply the distance between the tip position and the goal
@@ -238,9 +225,9 @@ class VariableTarget(EnvironmentWrapper):
     This type of environment will vary the target goal randomly
     """
 
-    def __init__(self,manipulator, workspace, tipOnly=True, bound = 30/100, terminal = 2/100):
+    def __init__(self,manipulator, workspace, measure_states=1, bound = 30/100, terminal = 2/100):
         self.workspace = workspace #workspace to sample goal from
-        self.tipOnly = tipOnly
+        self.measure_states = measure_states
         self.bound= bound
         self.terminal = terminal
 
@@ -254,11 +241,7 @@ class VariableTarget(EnvironmentWrapper):
         high_vel = [10]*6
 
         #include the goal into the observation space
-
-        if self.tipOnly:
-            observation_space = spaces.Box(low = np.array(pos_low + angle_low+pos_low+low_vel), high = np.array(pos_high + angle_high+pos_high+high_vel), dtype=np.float32)
-        else: #return tip and mid
-            observation_space = spaces.Box(low = np.array(pos_low + (angle_low+pos_low+low_vel)*2), high = np.array(pos_high + (angle_high+pos_high+high_vel)*2), dtype=np.float32)
+        observation_space = spaces.Box(low = np.array(pos_low + (angle_low+pos_low+low_vel)*self.measure_states), high = np.array(pos_high + (angle_high+pos_high+high_vel)*self.measure_states), dtype=np.float32)
 
         super().__init__(manipulator,observation_space)
 
@@ -280,26 +263,14 @@ class VariableTarget(EnvironmentWrapper):
         #pick out the relevant states
         g = state['g']
         eta = state['eta']
-
-        if self.tipOnly:
-            R = np.array([g[-1,0:3],g[-1,3:6],g[-1,6:9]])
+        states = []
+        for i in range(self.measure_states):
+            R = np.array([g[-1-i,0:3],g[-1-i,3:6],g[-1-i,6:9]])
             angles = self.manipulator.eng.extractAngles(np2mat(R))
             angles = mat2np(angles).T[0]
-            obs = np.hstack([angles,g[-1,9:12],eta[-1,:]])
-        else:
-            R_tip = np.array([g[-1,0:3],g[-1,3:6],g[-1,6:9]])
-            angles_tip = self.manipulator.eng.extractAngles(np2mat(R_tip))
-            angles_tip = mat2np(angles_tip).T[0]
-            state_tip = np.hstack([angles_tip,g[-1,9:12],eta[-1,:]])
+            states = np.hstack([angles,g[-1-i,9:12],eta[-1-i,:],states])
 
-            mid = self.manipulator.n//2 + 1 #might not actually be the middle
-            R_mid = np.array([g[mid,0:3],g[mid,3:6],g[mid,6:9]])
-            angles_mid = self.manipulator.eng.extractAngles(np2mat(R_mid))
-            angles_mid = mat2np(angles_mid).T[0]
-            state_mid = np.hstack([angles_mid,g[mid,9:12],eta[mid,:]])
-            obs = np.hstack([state_tip,state_mid])
-
-        obs = np.hstack([self.getGoal(),obs])
+        obs = np.hstack([self.getGoal(),states])
         return obs
 
     def getReward(self,state):
@@ -338,10 +309,10 @@ class VariableTrajectory(EnvironmentWrapper):
     may be useful to augment the workspace a bit to gaurantee that the trajectory is in a reasonable location
     """
 
-    def __init__(self,manipulator, workspace, tau, tipOnly=True, bound = 30/100):
+    def __init__(self,manipulator, workspace, tau, measure_states = 1, bound = 30/100):
         self.manipulator = manipulator #I thought this would occur in the call to super()
         self.workspace = workspace #workspace to sample goal from
-        self.tipOnly = tipOnly
+        self.measure_states = measure_states
         self.bound = bound
 
         self.manualGoal = False #be able to manually set the goal
@@ -357,11 +328,7 @@ class VariableTrajectory(EnvironmentWrapper):
         high_vel = [10]*6
 
         #include the goal into the observation space, the goal is a position and velocity
-
-        if self.tipOnly:
-            observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + angle_low+pos_low+low_vel), high = np.array(pos_high + high_vel[:3] + angle_high+pos_high+high_vel), dtype=np.float32)
-        else: #return tip and mid
-            observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + (angle_low+pos_low+low_vel)*2), high = np.array(pos_high + high_vel[:3] + (angle_high+pos_high+high_vel)*2), dtype=np.float32)
+        observation_space = spaces.Box(low = np.array(pos_low + low_vel[:3] + (angle_low+pos_low+low_vel)*self.measure_states), high = np.array(pos_high + high_vel[:3] + (angle_high+pos_high+high_vel)*self.measure_states), dtype=np.float32)
 
         #the parameters for the trajectory definition
         self.tau = tau
@@ -416,26 +383,14 @@ class VariableTrajectory(EnvironmentWrapper):
         #pick out the relevant states
         g = state['g']
         eta = state['eta']
-
-        if self.tipOnly:
-            R = np.array([g[-1,0:3],g[-1,3:6],g[-1,6:9]])
+        states = []
+        for i in range(self.measure_states):
+            R = np.array([g[-1-i,0:3],g[-1-i,3:6],g[-1-i,6:9]])
             angles = self.manipulator.eng.extractAngles(np2mat(R))
             angles = mat2np(angles).T[0]
-            obs = np.hstack([angles,g[-1,9:12],eta[-1,:]])
-        else:
-            R_tip = np.array([g[-1,0:3],g[-1,3:6],g[-1,6:9]])
-            angles_tip = self.manipulator.eng.extractAngles(np2mat(R_tip))
-            angles_tip = mat2np(angles_tip).T[0]
-            state_tip = np.hstack([angles_tip,g[-1,9:12],eta[-1,:]])
+            states = np.hstack([angles,g[-1-i,9:12],eta[-1-i,:],states])
 
-            mid = self.manipulator.n//2 + 1 #might not actually be the middle
-            R_mid = np.array([g[mid,0:3],g[mid,3:6],g[mid,6:9]])
-            angles_mid = self.manipulator.eng.extractAngles(np2mat(R_mid))
-            angles_mid = mat2np(angles_mid).T[0]
-            state_mid = np.hstack([angles_mid,g[mid,9:12],eta[mid,:]])
-            obs = np.hstack([state_tip,state_mid])
-
-        obs = np.hstack([self.getGoal(),obs])
+        obs = np.hstack([self.getGoal(),states])
         return obs
 
     def getReward(self,state):
