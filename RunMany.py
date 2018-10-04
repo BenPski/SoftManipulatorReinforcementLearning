@@ -27,19 +27,19 @@ def processesFromConfig(config):
     return processes
 
 if __name__ == "__main__":
-    
+
     parser = ArgumentParser(description="Run many learning processes at once. Provide a config that specifies the processes to run.")
     parser.add_argument('config', type=str, help="The location of the config to read that specifies the processes.")
-    
+
     args = parser.parse_args()
-    
+
     config = ConfigParser()
     try:
         with open(args.config,'r') as f:
             config.read_file(f)
     except:
         sys.exit("Unable to read specified config.")
-        
+
     processes = processesFromConfig(config)
 
 
@@ -48,8 +48,8 @@ if __name__ == "__main__":
     #    for state in ['tip','both']:
     #        for (task,samples,replicates) in [('dynReach',50000,3), ('varTarg',200000,3), ('varTraj',1000000,1)]:
     #            processes = processes + [(manip,state,task,samples)]*replicates
-                
+
     print(processes)
-    
-    with multiprocessing.Pool(6) as p:
+
+    with multiprocessing.Pool(4) as p:
         p.map(spawnProcess,processes)
