@@ -25,6 +25,7 @@ def processesFromConfig(config):
     processes = []
     for exp in config.sections():
         params = config[exp]
+        print(params)
         task = params['task']
         manip = params['manip']
         measure = params['measure']

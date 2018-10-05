@@ -404,7 +404,7 @@ class ConfigHandler(object):
         agent.save_weights(self.storage.weights_location(), overwrite=True)
         return self
     
-    def load_perf(self):
+    def get_perf(self):
         #get the performance measure
         with open(self.storage.perf_location(), 'rb') as f:
             perf = pickle.load(f)
@@ -481,4 +481,3 @@ def selectTrajectoryParams(staticWorkspace):
 
     return (z, r)
 
-    
