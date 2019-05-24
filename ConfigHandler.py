@@ -175,7 +175,9 @@ class VarTargTest(TaskTest):
         env.terminal = self.terminal
         reaches = 0
         errs = []
+        #print("Variable target testing")
         for sample in range(self.repeat):
+            #print("sample: ",sample)
             target = workspace.sample()
             obs = env.reset()
             obs[:3] = target
@@ -190,8 +192,12 @@ class VarTargTest(TaskTest):
                 if terminal:
                     reaches += 1
                     break
-            pos_err = np.linalg.norm(obs[:3]-obs[6:9])
-            errs.append(pos_err/0.04)
+            state = env.manipulator.getState()
+            g = state['g']
+            #tip = g[9:12,-1]
+            tip = g[12:15,-1]
+            pos_err = np.linalg.norm(target-tip)
+            errs.append(pos_err/0.1)
         return (reaches, np.mean(errs))
         
     
@@ -224,7 +230,11 @@ class VarTrajTest(TaskTest):
             obs, _, _, _ = env.step(a)
             if render:
                 env.render()
-            errs.append(np.linalg.norm(goal[:3]-obs[6:9])/0.04)
+            state = env.manipulator.getState()
+            g = state['g']
+            #tip = g[9:12,-1]
+            tip = g[12:15,-1]
+            errs.append(np.linalg.norm(goal[:3]-tip)/0.1)
         return errs
 
 
@@ -347,9 +357,11 @@ class ConfigHandler(object):
         kwargs are necessary for the variability in the task specification
         """
         if act_type == 'cable':
-            manip = ManipConfig(10,0.01,0.1,ManipCable())
+            #manip = ManipConfig(6,0.1*0.1/5*((100e3/1000)**0.5),-0.1,ManipCable())
+            #manip = ManipConfig(10,1e-1,-0.08,ManipCable())
+            manip = ManipConfig(6,0.05,-0.5,ManipCable())
         elif act_type == 'tca':
-            manip = ManipConfig(5,0.5,3,ManipTCA())
+            manip = ManipConfig(5,1,3,ManipTCA())
         else:
             raise Exception("Didn't recognize the given actuator type")
             

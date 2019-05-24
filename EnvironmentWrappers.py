@@ -164,8 +164,8 @@ class DynamicReaching(EnvironmentWrapper):
         #defining observation_space
         angle_low = [-np.pi]*3
         angle_high = [np.pi]*3
-        pos_low = [-0.1,-0.1,0.035]
-        pos_high = [0.1,0.1,0.045]
+        pos_low = [-0.1,-0.1,0.05]
+        pos_high = [0.1,0.1,0.11]
 
         low_vel = [-10]*6
         high_vel = [10]*6
@@ -192,31 +192,35 @@ class DynamicReaching(EnvironmentWrapper):
         eta = state['eta']
         states = []
         for i in range(self.measure_states):
-            R = np.array([g[-1-i,0:3],g[-1-i,3:6],g[-1-i,6:9]])
+            #R = np.array([g[0:3,-1-i],g[3:6,-1-i],g[6:9,-1-i]])
+            R = np.array([g[0:3,-1-i],g[4:7,-1-i],g[8:11,-1-i]])
             angles = self.manipulator.eng.extractAngles(np2mat(R))
             angles = mat2np(angles).T[0]
-            states = np.hstack([angles,g[-1-i,9:12],eta[-1-i,:],states])
+            #states = np.hstack([angles,g[9:12,-1-i],eta[:,-1-i],states])
+            states = np.hstack([angles,g[12:15,-1-i],eta[:,-1-i],states])
         return states
 
     def getReward(self,state):
         #the reward for this case is simply the distance between the tip position and the goal
         g = state['g']
-        tip = g[-1,9:12]
+        #tip = g[9:12,-1]
+        tip = g[12:15,-1]
         dist = np.linalg.norm(tip-self.getGoal())
-        #return self.rewardScale*dist
-        bound = 0.04*self.bound
-        if dist <= bound:
-            return -dist/bound
-        else:
-            return -1
+        return -1*dist
+        #bound = 0.1*self.bound
+        #if dist <= bound:
+        #    return -dist/bound
+        #else:
+        #    return -1
 
     def getTerminal(self,state):
         #since this should be a point just outside the workspace, do not want to keep running once the point is reached
         g = state['g']
-        tip = g[-1,9:12]
+        #tip = g[9:12,-1]
+        tip = g[12:15,-1]
         dist = np.linalg.norm(tip-self.getGoal())
 
-        return dist<0.04*self.terminal #withing _ percent tip error
+        return dist<0.1*self.terminal #withing _ percent tip error
         #return False
 
 
@@ -234,8 +238,8 @@ class VariableTarget(EnvironmentWrapper):
         #defining observation_space
         angle_low = [-np.pi]*3
         angle_high = [np.pi]*3
-        pos_low = [-0.1,-0.1,0.035]
-        pos_high = [0.1,0.1,0.045]
+        pos_low = [-0.1,-0.1,0.05]
+        pos_high = [0.1,0.1,0.11]
 
         low_vel = [-10]*6
         high_vel = [10]*6
@@ -265,10 +269,12 @@ class VariableTarget(EnvironmentWrapper):
         eta = state['eta']
         states = []
         for i in range(self.measure_states):
-            R = np.array([g[-1-i,0:3],g[-1-i,3:6],g[-1-i,6:9]])
+            #R = np.array([g[0:3,-1-i],g[3:6,-1-i],g[6:9,-1-i]])
+            R = np.array([g[0:3,-1-i],g[4:7,-1-i],g[8:11,-1-i]])
             angles = self.manipulator.eng.extractAngles(np2mat(R))
             angles = mat2np(angles).T[0]
-            states = np.hstack([angles,g[-1-i,9:12],eta[-1-i,:],states])
+            #states = np.hstack([angles,g[9:12,-1-i],eta[:,-1-i],states])
+            states = np.hstack([angles,g[12:15,-1-i],eta[:,-1-i],states])
 
         obs = np.hstack([self.getGoal(),states])
         return obs
@@ -276,9 +282,10 @@ class VariableTarget(EnvironmentWrapper):
     def getReward(self,state):
         #the reward for this case is simply the distance between the tip position and the goal
         g = state['g']
-        tip = g[-1,9:12]
+        #tip = g[9:12,-1]
+        tip = g[12:15,-1]
         dist = np.linalg.norm(tip-self.getGoal())
-        bound = 0.04*self.bound
+        bound = 0.1*self.bound
         if dist <= bound:
             return -dist/bound
         else:
@@ -288,11 +295,12 @@ class VariableTarget(EnvironmentWrapper):
     def getTerminal(self,state):
         #this is a random point in the workspace, so given that some are only dynamically reachable it should terminate
         g = state['g']
-        tip = g[-1,9:12]
+        #tip = g[9:12,-1]
+        tip = g[12:15,-1]
         dist = np.linalg.norm(tip-self.getGoal())
 
 
-        return dist<0.04*self.terminal
+        return dist<0.1*self.terminal
 
     def genGoal(self):
         goal = self.workspace.sample()
@@ -321,8 +329,8 @@ class VariableTrajectory(EnvironmentWrapper):
         #confusing naming scheme, whoops
         angle_low = [-np.pi]*3
         angle_high = [np.pi]*3
-        pos_low = [-0.1,-0.1,0.035]
-        pos_high = [0.1,0.1,0.045]
+        pos_low = [-0.1,-0.1,0.05]
+        pos_high = [0.1,0.1,0.11]
 
         low_vel = [-10]*6
         high_vel = [10]*6
@@ -385,10 +393,12 @@ class VariableTrajectory(EnvironmentWrapper):
         eta = state['eta']
         states = []
         for i in range(self.measure_states):
-            R = np.array([g[-1-i,0:3],g[-1-i,3:6],g[-1-i,6:9]])
+            #R = np.array([g[0:3,-1-i],g[3:6,-1-i],g[6:9,-1-i]])
+            R = np.array([g[0:3,-1-i],g[4:7,-1-i],g[8:11,-1-i]])
             angles = self.manipulator.eng.extractAngles(np2mat(R))
             angles = mat2np(angles).T[0]
-            states = np.hstack([angles,g[-1-i,9:12],eta[-1-i,:],states])
+            #states = np.hstack([angles,g[9:12,-1-i],eta[:,-1-i],states])
+            states = np.hstack([angles,g[12:15,-1-i],eta[:,-1-i],states])
 
         obs = np.hstack([self.getGoal(),states])
         return obs
@@ -396,9 +406,10 @@ class VariableTrajectory(EnvironmentWrapper):
     def getReward(self,state):
         #still only rewarding a similar position
         g = state['g']
-        tip = g[-1,9:12]
+        #tip = g[9:12,-1]
+        tip = g[12:15,-1]
         dist = np.linalg.norm(tip-self.getGoal()[:3])
-        bound = 0.04*self.bound
+        bound = 0.1*self.bound
 
         if dist<=bound:
             return -dist/bound

@@ -90,7 +90,7 @@ class Controller(object):
         elif type(self.task.taskType) == TaskVariableTarget:
             return EW.VariableTarget(self.manip, self.dynamicWorkspace, measure_states = self.task.measure, bound = self.task.taskType.train.bound, terminal = self.task.taskType.train.terminal)
         elif type(self.task.taskType) == TaskVariableTrajectory:
-            return EW.VariableTrajectory(self.manip, self.staticWorkspace, self.configHandler.manip.dt*self.task.taskType.train.steps, measures_states = self.task.measure, bound = self.task.taskType.train.bound)
+            return EW.VariableTrajectory(self.manip, self.staticWorkspace, 10*self.configHandler.manip.dt*self.task.taskType.train.steps, measure_states = self.task.measure, bound = self.task.taskType.train.bound)
         else:
             raise Exception("Task is of the wrong type")
     

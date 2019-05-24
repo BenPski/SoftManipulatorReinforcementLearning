@@ -28,6 +28,8 @@ class ConfigManager(object):
     def fromDirectory(cls, directory):
         """
         Initialize the manager by grabbing all the configs in a directory
+        
+        Possibly make this watch a directoy at some point, but that is just getting fancy and isn't necessary
         """
         
         configs = []

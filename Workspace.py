@@ -74,7 +74,7 @@ class Workspace(object):
         
 
 
-def makeStaticManipulatorWorkspace(manip, SAMPLES = 100, STEPS = 100):
+def makeStaticManipulatorWorkspace(manip, SAMPLES = 100, STEPS = 500):
     """
     approximate the static workspace of a manipulator
 
@@ -100,13 +100,55 @@ def makeStaticManipulatorWorkspace(manip, SAMPLES = 100, STEPS = 100):
     for s in range(acts.shape[0]):
         manip.initState()
         a = acts[s,:]
+        #for _ in range(5): #first couple steps are small to see if it improves integration
+        #    manip.step(a/10)
         for _ in range(STEPS):
             manip.step(a)
-
+            manip.render(hold=True)
+    
         state = manip.getState()
         g = state['g']
-        pos = g[-1,9:12]
+        #pos = g[9:12,-1]
+        pos = g[12:15,-1]
         points[s,:] = pos
+        
+
+    return Workspace(points)
+
+def makeStaticManipulatorWorkspaceFromStatics(manip, SAMPLES = 100):
+    """
+    These names are getting really ridiculous
+    
+    get the static workspace by running the actual statics
+
+    SAMPLES: points to generate
+    """
+
+    #random actions
+    #acts = np.random.uniform([0,0,0],manip.max_q*np.array([1,1,1]),(SAMPLES,3))
+
+    #grid of actions
+    # the actions are automatically scaled in the manipulator object
+    vals = np.linspace(0,1,round(SAMPLES**(1/3)))
+    acts = []
+    for act1 in vals:
+        for act2 in vals:
+            for act3 in vals:
+                acts.append(np.array([act1,act2,act3]))
+    acts = np.array(acts)
+
+    points = np.zeros(acts.shape)
+    manip.initState()
+    for s in range(acts.shape[0]):
+        a = acts[s,:]
+        manip.step(a)
+        manip.render(hold=True)
+    
+        state = manip.getState()
+        g = state['g']
+        pos = g[9:12,-1]
+        points[s,:] = pos
+        
 
     return Workspace(points)
 
@@ -135,7 +177,8 @@ def makeDynamicManipulatorWorkspace(manip, SAMPLES = 500, STEPS = 5, IDLE_CHANCE
                     manip.render(hold=True)
                 state = manip.getState()
                 g = state['g']
-                pos = g[-1,9:12]
+                #pos = g[-9:12,-1]
+                pos = g[12:15,-1]
                 points.append(pos)
 
     return Workspace(np.array(points))
@@ -163,7 +206,7 @@ def dynamicWorkspace(manip, staticWorkspace, SAMPLES = 500, STEPS = 5, IDLE_CHAN
                     manip.render(hold=True)
                 state = manip.getState()
                 g = state['g']
-                pos = g[-1,9:12]
+                pos = g[9:12,-1]
                 points.append(pos)
         all_points = points + dynWorkspace.vertices.tolist()
         dynWorkspace = Workspace(np.array(all_points))
